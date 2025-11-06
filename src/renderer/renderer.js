@@ -39,6 +39,13 @@ let inputDir = '';
 let outputDir = '';
 let running = false;
 let fileItems = new Map(); // id -> DOM refs
+let autoScrollFiles = true;
+
+// Auto-scroll file list to bottom unless the user scrolls up
+fileList.addEventListener('scroll', () => {
+  const nearBottom = fileList.scrollTop + fileList.clientHeight >= fileList.scrollHeight - 24;
+  autoScrollFiles = nearBottom;
+});
 const phaseActive = { detect: 0, analyze: 0, render: 0 };
 
 function updateBatchStatus() {
@@ -198,6 +205,9 @@ function ensureFileItem(id, name) {
   `;
   fileList.appendChild(el);
   fileItems.set(id, el);
+  if (autoScrollFiles) {
+    fileList.scrollTop = fileList.scrollHeight;
+  }
   return el;
 }
 

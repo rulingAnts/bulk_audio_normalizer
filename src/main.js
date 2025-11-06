@@ -124,7 +124,7 @@ function buildTrimFilter(settings, durationSeconds) {
   if ((durationSeconds || 0) * 1000 < minFileMs) return null; // skip trimming very short files
 
   // Start with user-provided values
-  let padMs = Math.max(0, Number(settings.trimPadMs ?? 500));
+  let padMs = Math.max(0, Number(settings.trimPadMs ?? 800));
   let minDurMs = Math.max(10, Number(settings.trimMinDurationMs ?? 200));
   let thDb = Number(settings.trimThresholdDb ?? -50);
   const detect = (settings.trimDetect || 'rms') === 'peak' ? 'peak' : 'rms';
@@ -160,9 +160,18 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
   if (hpf) filters.push('highpass=f=80');
   filters.push(`silencedetect=n=${n}dB:d=${d}`);
 
+  try {
+    mainWindow.webContents.send('log', {
+      fileId,
+      phase: 'trim',
+      line: `Detect config: threshold=${n}dB, minDur=${d}s, HPF=${hpf ? 'on' : 'off'}, conservative=${conservative ? 'on' : 'off'}`,
+    });
+  } catch {}
+
   return await new Promise((resolve) => {
+    // Force info verbosity for silencedetect so it emits silence_start/end lines
     const args = [
-      ...ffVerbosityArgs(settings?.verboseLogs),
+      '-hide_banner', '-nostats', '-v', 'info',
       '-i', input,
       '-af', filters.join(','),
       '-f', 'null', '-'
@@ -242,13 +251,22 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
     if (durationSec * 1000 >= minFileMs) {
   const region = await detectVoiceRegion({ input, durationSec, settings, fileId });
       if (region) {
-        const padSec = Math.max(0, Number(settings.trimPadMs ?? 500) / 1000);
+  const padSec = Math.max(0, Number(settings.trimPadMs ?? 800) / 1000);
         const start = Math.max(0, region.start - padSec);
         const end = Math.min(durationSec, region.end + padSec);
         if (end > start) {
           trimFilter = `atrim=start=${start}:end=${end},asetpts=N/SR/TB`;
+          const kept = (end - start).toFixed(3);
+          const padInfo = (padSec * 1000).toFixed(0);
+          try { mainWindow.webContents.send('log', { fileId, phase: 'trim', line: `Trim applied: start=${start.toFixed(3)}s end=${end.toFixed(3)}s (kept ${kept}s of ${durationSec.toFixed(3)}s, pad=${padInfo}ms)` }); } catch {}
+        } else {
+          try { mainWindow.webContents.send('log', { fileId, phase: 'trim', line: `No trimming applied: computed end <= start after padding (start=${start.toFixed(3)}s end=${end.toFixed(3)}s)` }); } catch {}
         }
+      } else {
+        try { mainWindow.webContents.send('log', { fileId, phase: 'trim', line: 'No trimming applied: could not detect a non-silent region.' }); } catch {}
       }
+    } else {
+      try { mainWindow.webContents.send('log', { fileId, phase: 'trim', line: `No trimming applied: file shorter than minimum ${minFileMs}ms.` }); } catch {}
     }
   }
   try { mainWindow.webContents.send('phase-event', { fileId, phase: 'detect', status: 'done' }); } catch {}

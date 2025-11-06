@@ -20,6 +20,7 @@
           <input id="inputPath" type="text" placeholder="Choose input folder" readonly />
           <button id="btnInput">Browse…</button>
         </div>
+        <div class="hint"></div>
       </div>
       <div class="picker">
         <label>Output folder (must be empty)</label>
@@ -29,9 +30,12 @@
         </div>
         <div id="outputValidation" class="hint"></div>
       </div>
+      <div>
       <div class="actions">
         <button id="btnStart" disabled>Start</button>
         <button id="btnCancel" disabled>Cancel</button>
+      </div>
+      <div class="hint"></div>
       </div>
     </section>
 
@@ -76,8 +80,8 @@
         <label for="autoTrim">Auto-trim leading/trailing silence</label>
         <input id="autoTrim" type="checkbox" checked />
 
-        <label for="trimPadMs">Keep padding each side (ms)</label>
-        <input id="trimPadMs" type="number" min="0" value="500" />
+  <label for="trimPadMs">Keep padding each side (ms)</label>
+  <input id="trimPadMs" type="number" min="0" value="800" />
 
         <label for="trimThresholdDb">Silence threshold (dBFS)</label>
         <input id="trimThresholdDb" type="number" step="1" value="-50" />
@@ -103,16 +107,20 @@
     </details>
 
     <section class="files">
-      <h2>Files</h2>
-      <div id="fileList" class="file-list"></div>
+      <details id="filesPanel" class="collapsible" open>
+        <summary>File status</summary>
+        <div id="fileList" class="file-list"></div>
+      </details>
     </section>
 
     <section class="logs">
-      <h2>Log</h2>
-      <div class="log-actions">
-        <button id="btnClearLog">Clear log</button>
-      </div>
-      <pre id="logView" class="log-view"></pre>
+      <details id="logPanel" class="collapsible">
+        <summary>Debug log</summary>
+        <div class="log-actions">
+          <button id="btnClearLog">Clear log</button>
+        </div>
+        <pre id="logView" class="log-view"></pre>
+      </details>
     </section>
 
     <footer>
