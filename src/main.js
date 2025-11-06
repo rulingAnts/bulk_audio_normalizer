@@ -42,11 +42,13 @@ app.on('window-all-closed', () => {
 });
 
 // Utilities
-function selectDirectoryDialog(defaultPath) {
+function selectDirectoryDialog(defaultPath, allowCreate = false) {
+  const props = ['openDirectory'];
+  if (allowCreate) props.push('createDirectory');
   return dialog.showOpenDialog(mainWindow, {
     title: 'Select folder',
     defaultPath: defaultPath || os.homedir(),
-    properties: ['openDirectory'],
+    properties: props,
   });
 }
 
@@ -293,12 +295,12 @@ function sampleRandom(items, count) {
 
 // IPC handlers
 ipcMain.handle('select-input-folder', async (evt, lastPath) => {
-  const res = await selectDirectoryDialog(lastPath);
+  const res = await selectDirectoryDialog(lastPath, false);
   return res.canceled ? null : res.filePaths[0];
 });
 
 ipcMain.handle('select-output-folder', async (evt, lastPath) => {
-  const res = await selectDirectoryDialog(lastPath);
+  const res = await selectDirectoryDialog(lastPath, true);
   return res.canceled ? null : res.filePaths[0];
 });
 
