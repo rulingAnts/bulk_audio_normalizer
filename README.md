@@ -26,6 +26,12 @@ npm start
 
 This launches the Electron app in development mode.
 
+## Preview mode (random spot check)
+
+- Use the Preview section to process a true random sample of files from your input folder with the current settings.
+- You can play Original vs Preview side by side in-app and reveal files in Finder/Explorer.
+- Previews are written to a temporary folder and do not touch your originals.
+
 ## Build distributables
 
 ```bash

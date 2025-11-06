@@ -13,6 +13,11 @@ const overallPct = $('#overallPct');
 const fileList = $('#fileList');
 const logView = $('#logView');
 const btnClearLog = $('#btnClearLog');
+// Preview elements
+const btnPreview = $('#btnPreview');
+const previewCount = $('#previewCount');
+const previewList = $('#previewList');
+const previewInfo = $('#previewInfo');
 
 // Settings inputs
 const inLufs = $('#lufsTarget');
@@ -81,6 +86,7 @@ function setRunning(state) {
   btnCancel.disabled = !running;
   btnInput.disabled = running;
   btnOutput.disabled = running;
+  btnPreview.disabled = running || !inputDir; // can preview without output
 }
 
 // Persist settings on change
@@ -199,4 +205,49 @@ window.api.onLog(({ fileId, phase, line }) => {
 
 btnClearLog.addEventListener('click', () => {
   logView.textContent = '';
+});
+
+// Preview handling
+btnPreview.addEventListener('click', async () => {
+  if (!inputDir) {
+    alert('Select an input folder first.');
+    return;
+  }
+  previewList.innerHTML = '';
+  previewInfo.textContent = 'Running preview…';
+  const s = currentSettings();
+  const count = Math.max(1, Math.min(50, Number(previewCount.value || 5)));
+  const res = await window.api.startPreview({ inputDir, settings: s, sampleSize: count, concurrency: Math.min(2, s.concurrency || 2) });
+  if (!res.ok) {
+    alert(res.error || 'Preview failed to start');
+    previewInfo.textContent = '';
+  } else {
+    previewInfo.textContent = `Preview folder: ${res.tmpBase}`;
+  }
+});
+
+window.api.onPreviewFileDone(({ original, preview, rel }) => {
+  const card = document.createElement('div');
+  card.className = 'preview-card';
+  const display = rel || original.split('/').slice(-1)[0];
+  card.innerHTML = `
+    <div class="path" title="${display}">…/${display}</div>
+    <div class="players">
+      <div><strong>Original</strong><br/><audio controls src="file://${original}"></audio></div>
+      <div><strong>Preview</strong><br/><audio controls src="file://${preview}"></audio></div>
+    </div>
+    <div class="actions">
+      <button data-role="reveal-original">Reveal original</button>
+      <button data-role="reveal-preview">Reveal preview</button>
+    </div>
+  `;
+  const btnRO = card.querySelector('[data-role="reveal-original"]');
+  const btnRP = card.querySelector('[data-role="reveal-preview"]');
+  btnRO.addEventListener('click', () => window.api.revealPath(original));
+  btnRP.addEventListener('click', () => window.api.revealPath(preview));
+  previewList.appendChild(card);
+});
+
+window.api.onPreviewDone(({ count, tmpBase }) => {
+  previewInfo.textContent = `Preview complete: ${count} files -> ${tmpBase}`;
 });

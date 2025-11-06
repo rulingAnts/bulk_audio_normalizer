@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; media-src 'self' file: data:;" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bulk Audio Normalizer (-16 LUFS, 16-bit WAV)</title>
     <link rel="stylesheet" href="styles.css" />
@@ -41,6 +41,17 @@
         <span id="overallPct">0%</span>
       </div>
       <div class="progress"><div id="overallBar" class="bar" style="width:0%"></div></div>
+    </section>
+
+    <section class="preview">
+      <h2>Preview (random spot check)</h2>
+      <div class="row">
+        <label for="previewCount" class="inline-label">Sample size</label>
+        <input id="previewCount" type="number" min="1" max="50" value="5" />
+        <button id="btnPreview">Run Preview</button>
+      </div>
+      <div id="previewInfo" class="hint"></div>
+      <div id="previewList" class="preview-list"></div>
     </section>
 
     <section class="settings">

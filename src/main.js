@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -281,6 +281,16 @@ function limitConcurrency(items, limit, worker) {
   });
 }
 
+function sampleRandom(items, count) {
+  const n = Math.min(count, items.length);
+  const arr = items.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, n);
+}
+
 // IPC handlers
 ipcMain.handle('select-input-folder', async (evt, lastPath) => {
   const res = await selectDirectoryDialog(lastPath);
@@ -394,4 +404,54 @@ ipcMain.handle('cancel-processing', () => {
   }
   activeJobs.clear();
   return true;
+});
+
+ipcMain.handle('reveal-path', (evt, filePath) => {
+  try { shell.showItemInFolder(filePath); return true; } catch { return false; }
+});
+
+ipcMain.handle('start-preview', async (evt, { inputDir, sampleSize = 5, settings, concurrency = 2 }) => {
+  const allFiles = listWavFilesRecursive(inputDir);
+  if (allFiles.length === 0) {
+    return { ok: false, error: 'No WAV files found for preview.' };
+  }
+  const files = sampleRandom(allFiles, sampleSize);
+
+  const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'ban-preview-'));
+  const items = files.map((filePath, idx) => {
+    const rel = path.relative(inputDir, filePath);
+    const outPath = path.join(tmpBase, rel).replace(/\.(wav|wave)$/i, '.wav');
+    ensureDir(path.dirname(outPath));
+    const id = `preview_${Date.now()}_${idx}`;
+    activeJobs.set(id, { procs: [], canceled: false });
+    return { id, in: filePath, out: outPath, rel };
+  });
+
+  // Pre-fetch durations to inform trimming safety
+  const durations = new Map();
+  await limitConcurrency(items, concurrency, async (item) => {
+    const dur = await getDurationSeconds(item.in);
+    durations.set(item.id, dur > 0 ? dur : 1);
+  });
+
+  try {
+    await limitConcurrency(items, concurrency, async (item) => {
+      const dur = durations.get(item.id) || 1;
+      await loudnormTwoPassWithLimiter({
+        input: item.in,
+        output: item.out,
+        fileId: item.id,
+        settings: { ...settings, currentFileDurationSec: dur },
+        onProgress: () => {},
+      });
+      mainWindow.webContents.send('preview-file-done', { id: item.id, original: item.in, preview: item.out, rel: item.rel, tmpBase });
+    });
+    mainWindow.webContents.send('preview-done', { count: items.length, tmpBase });
+    return { ok: true, count: items.length, tmpBase };
+  } catch (err) {
+    mainWindow.webContents.send('error', { message: `Preview failed: ${err.message}` });
+    return { ok: false, error: err.message };
+  } finally {
+    activeJobs.clear();
+  }
 });
