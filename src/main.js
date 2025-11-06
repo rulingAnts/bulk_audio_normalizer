@@ -142,11 +142,108 @@ function buildTrimFilter(settings, durationSeconds) {
   return trim;
 }
 
+async function detectVoiceRegion({ input, durationSec, settings }) {
+  // Build silencedetect filter (optional HPF first for robustness)
+  const thDb = Number(settings.trimThresholdDb ?? -50);
+  const minDurSec = Math.max(0.01, Number(settings.trimMinDurationMs ?? 200) / 1000);
+  const conservative = !!settings.trimConservative;
+  const hpf = !!settings.trimHPF;
+  const n = conservative ? Math.min(thDb, -60) : thDb;
+  const d = conservative ? Math.max(minDurSec, 0.3) : minDurSec;
+  const filters = [];
+  if (hpf) filters.push('highpass=f=80');
+  filters.push(`silencedetect=n=${n}dB:d=${d}`);
+
+  return await new Promise((resolve) => {
+    const args = [
+      '-hide_banner',
+      '-nostats',
+      '-i', input,
+      '-af', filters.join(','),
+      '-f', 'null', '-'
+    ];
+    const p = run(ffmpegStatic, args);
+    let stderr = '';
+    p.stderr.on('data', (data) => {
+      const s = data.toString();
+      stderr += s;
+    });
+    p.on('close', () => {
+      const reStart = /silence_start: ([0-9]+\.?[0-9]*)/g;
+      const reEnd = /silence_end: ([0-9]+\.?[0-9]*)/g;
+      const silence = [];
+      let curStart = null;
+      let m;
+      while ((m = reStart.exec(stderr)) !== null) {
+        curStart = parseFloat(m[1]);
+        // try to find the next end from current index
+        const endMatch = reEnd.exec(stderr);
+        if (endMatch) {
+          const e = parseFloat(endMatch[1]);
+          const sVal = curStart ?? 0;
+          silence.push([Math.max(0, sVal), Math.min(durationSec, e)]);
+          curStart = null;
+        } else {
+          // will close at end with duration
+          break;
+        }
+      }
+      if (curStart != null) {
+        silence.push([Math.max(0, curStart), Math.max(curStart, durationSec)]);
+      }
+
+      // Normalize and merge overlaps
+      silence.sort((a, b) => a[0] - b[0]);
+      const merged = [];
+      for (const seg of silence) {
+        if (!merged.length || seg[0] > merged[merged.length - 1][1]) {
+          merged.push(seg.slice());
+        } else {
+          merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], seg[1]);
+        }
+      }
+
+      // Complement to get non-silent intervals
+      const nonSilent = [];
+      let prev = 0;
+      for (const [s, e] of merged) {
+        if (s > prev) nonSilent.push([prev, s]);
+        prev = Math.max(prev, e);
+      }
+      if (prev < durationSec) nonSilent.push([prev, durationSec]);
+
+      if (nonSilent.length === 0) {
+        resolve(null);
+        return;
+      }
+      const start = nonSilent[0][0];
+      const end = nonSilent[nonSilent.length - 1][1];
+      resolve({ start, end });
+    });
+  });
+}
+
 async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, settings }) {
   const targetI = Number(settings?.lufsTarget ?? -16);
   const targetTP = Number(settings?.tpMargin ?? -1.0);
   const limiter = Number(settings?.limiterLimit ?? 0.97);
-  const trimFilter = buildTrimFilter(settings, Number(settings?.currentFileDurationSec || 0));
+  const durationSec = Number(settings?.currentFileDurationSec || 0) || 0;
+
+  let trimFilter = null;
+  if (settings?.autoTrim) {
+    const minFileMs = Math.max(0, Number(settings.trimMinFileMs ?? 800));
+    if (durationSec * 1000 >= minFileMs) {
+      const region = await detectVoiceRegion({ input, durationSec, settings });
+      if (region) {
+        const padSec = Math.max(0, Number(settings.trimPadMs ?? 500) / 1000);
+        const start = Math.max(0, region.start - padSec);
+        const end = Math.min(durationSec, region.end + padSec);
+        if (end > start) {
+          trimFilter = `atrim=start=${start}:end=${end},asetpts=N/SR/TB`;
+        }
+      }
+    }
+  }
   // Pass 1: analyze loudness
   const pass1FilterParts = [];
   if (trimFilter) pass1FilterParts.push(trimFilter);
