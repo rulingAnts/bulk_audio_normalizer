@@ -48,8 +48,11 @@ This will package the app using electron-builder into platform-specific artifact
 - Concurrency (number of files processed in parallel)
 - Auto-trim leading/trailing silence with adjustable parameters:
 	- Keep padding on each side (default 500 ms)
-	- Silence threshold in dBFS (default −50 dB)
-	- Minimum silence duration (default 200 ms)
+	- Silence threshold in dBFS (default −50 dB; conservative mode uses −60 dB)
+	- Minimum silence duration (default 200 ms; conservative mode uses 300 ms)
+	- Only trim if file longer than (default 800 ms)
+	- Conservative trim mode (safer for soft voices)
+	- Optional pre-filter rumble (80 Hz high‑pass)
 
 Settings are persisted locally per machine.
 

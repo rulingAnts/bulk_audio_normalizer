@@ -23,6 +23,9 @@ const chkAutoTrim = $('#autoTrim');
 const inTrimPadMs = $('#trimPadMs');
 const inTrimThresholdDb = $('#trimThresholdDb');
 const inTrimMinDurMs = $('#trimMinDurationMs');
+const inTrimMinFileMs = $('#trimMinFileMs');
+const chkTrimConservative = $('#trimConservative');
+const chkTrimHPF = $('#trimHPF');
 
 let inputDir = '';
 let outputDir = '';
@@ -44,6 +47,9 @@ function loadSettings() {
     if (s.trimPadMs != null) inTrimPadMs.value = s.trimPadMs;
     if (s.trimThresholdDb != null) inTrimThresholdDb.value = s.trimThresholdDb;
     if (s.trimMinDurationMs != null) inTrimMinDurMs.value = s.trimMinDurationMs;
+    if (s.trimMinFileMs != null) inTrimMinFileMs.value = s.trimMinFileMs;
+    if (typeof s.trimConservative === 'boolean') chkTrimConservative.checked = s.trimConservative;
+    if (typeof s.trimHPF === 'boolean') chkTrimHPF.checked = s.trimHPF;
   } catch {}
 }
 
@@ -63,6 +69,9 @@ function currentSettings() {
     trimThresholdDb: Number(inTrimThresholdDb.value),
     trimMinDurationMs: Math.max(0, Number(inTrimMinDurMs.value || 0)),
     trimDetect: 'rms',
+    trimMinFileMs: Math.max(0, Number(inTrimMinFileMs.value || 0)),
+    trimConservative: !!chkTrimConservative.checked,
+    trimHPF: !!chkTrimHPF.checked,
   };
 }
 
@@ -75,7 +84,7 @@ function setRunning(state) {
 }
 
 // Persist settings on change
-;[inLufs, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs].forEach((el) => el.addEventListener('change', saveSettings));
+;[inLufs, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF].forEach((el) => el.addEventListener('change', saveSettings));
 loadSettings();
 
 btnInput.addEventListener('click', async () => {

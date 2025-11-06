@@ -71,6 +71,15 @@
 
         <label for="trimMinDurationMs">Minimum silence duration (ms)</label>
         <input id="trimMinDurationMs" type="number" min="0" value="200" />
+
+        <label for="trimMinFileMs">Only trim if file longer than (ms)</label>
+        <input id="trimMinFileMs" type="number" min="0" value="800" />
+
+        <label for="trimConservative">Conservative trim (safer for soft voices)</label>
+        <input id="trimConservative" type="checkbox" checked />
+
+        <label for="trimHPF">Pre-filter rumble (HPF 80 Hz)</label>
+        <input id="trimHPF" type="checkbox" />
       </div>
       <div class="hint">Tip: Lower limiter ceiling (e.g., 0.97) for extra headroom. TP is in dBFS (negative values).</div>
     </section>

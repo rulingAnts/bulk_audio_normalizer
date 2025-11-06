@@ -110,21 +110,41 @@ function getDurationSeconds(filePath) {
   });
 }
 
-function buildTrimFilter(settings) {
+function buildTrimFilter(settings, durationSeconds) {
   if (!settings?.autoTrim) return null;
-  const padSec = Math.max(0, Number(settings.trimPadMs ?? 500) / 1000);
-  const minDurSec = Math.max(0.01, Number(settings.trimMinDurationMs ?? 200) / 1000);
-  const thDb = Number(settings.trimThresholdDb ?? -50);
+  const minFileMs = Math.max(0, Number(settings.trimMinFileMs ?? 800));
+  if ((durationSeconds || 0) * 1000 < minFileMs) return null; // skip trimming very short files
+
+  // Start with user-provided values
+  let padMs = Math.max(0, Number(settings.trimPadMs ?? 500));
+  let minDurMs = Math.max(10, Number(settings.trimMinDurationMs ?? 200));
+  let thDb = Number(settings.trimThresholdDb ?? -50);
   const detect = (settings.trimDetect || 'rms') === 'peak' ? 'peak' : 'rms';
-  // Use the same parameters for start and stop; leave_silence pads each side equally
-  return `silenceremove=start_periods=1:start_duration=${minDurSec}:start_threshold=${thDb}dB:stop_periods=1:stop_duration=${minDurSec}:stop_threshold=${thDb}dB:leave_silence=${padSec}:detection=${detect}`;
+  const useHPF = !!settings.trimHPF;
+
+  // Conservative mode raises safety margins for soft voices
+  if (settings.trimConservative) {
+    padMs = Math.max(padMs, 800);
+    minDurMs = Math.max(minDurMs, 300);
+    thDb = Math.min(thDb, -60); // lower threshold (more permissive to consider content as non-silence)
+  }
+
+  const padSec = padMs / 1000;
+  const minDurSec = minDurMs / 1000;
+
+  const trim = `silenceremove=start_periods=1:start_duration=${minDurSec}:start_threshold=${thDb}dB:stop_periods=1:stop_duration=${minDurSec}:stop_threshold=${thDb}dB:leave_silence=${padSec}:detection=${detect}`;
+  if (useHPF) {
+    // Remove low-frequency rumble that can confuse silence detection; 80 Hz is a common cutoff for speech
+    return `highpass=f=80,${trim}`;
+  }
+  return trim;
 }
 
 async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, settings }) {
   const targetI = Number(settings?.lufsTarget ?? -16);
   const targetTP = Number(settings?.tpMargin ?? -1.0);
   const limiter = Number(settings?.limiterLimit ?? 0.97);
-  const trimFilter = buildTrimFilter(settings);
+  const trimFilter = buildTrimFilter(settings, Number(settings?.currentFileDurationSec || 0));
   // Pass 1: analyze loudness
   const pass1FilterParts = [];
   if (trimFilter) pass1FilterParts.push(trimFilter);
@@ -341,7 +361,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
         input: item.in,
         output: item.out,
         fileId: item.id,
-        settings,
+        settings: { ...settings, currentFileDurationSec: dur },
         onProgress: (timeStr) => {
           const sec = parseFloat(parseFfmpegTimeToSeconds(timeStr).toFixed(2));
           perFileProgress.set(item.id, Math.min(sec, dur));
