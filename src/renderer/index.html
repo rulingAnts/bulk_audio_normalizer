@@ -38,6 +38,7 @@
     <section class="overall">
       <div class="row label-row">
         <span>Overall progress</span>
+        <span id="overallCount">0/0</span>
         <span id="overallPct">0%</span>
       </div>
       <div class="progress"><div id="overallBar" class="bar" style="width:0%"></div></div>
@@ -91,6 +92,11 @@
 
         <label for="trimHPF">Pre-filter rumble (HPF 80 Hz)</label>
         <input id="trimHPF" type="checkbox" />
+
+        <div class="sep" style="grid-column: 1 / -1; height: 8px;"></div>
+
+        <label for="verboseLogs">Verbose FFmpeg logs</label>
+        <input id="verboseLogs" type="checkbox" />
       </div>
       <div class="hint">Tip: Lower limiter ceiling (e.g., 0.97) for extra headroom. TP is in dBFS (negative values).</div>
     </details>

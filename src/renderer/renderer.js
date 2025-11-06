@@ -10,6 +10,7 @@ const btnCancel = $('#btnCancel');
 const outputValidation = $('#outputValidation');
 const overallBar = $('#overallBar');
 const overallPct = $('#overallPct');
+const overallCount = $('#overallCount');
 const fileList = $('#fileList');
 const logView = $('#logView');
 const btnClearLog = $('#btnClearLog');
@@ -31,6 +32,7 @@ const inTrimMinDurMs = $('#trimMinDurationMs');
 const inTrimMinFileMs = $('#trimMinFileMs');
 const chkTrimConservative = $('#trimConservative');
 const chkTrimHPF = $('#trimHPF');
+const chkVerbose = $('#verboseLogs');
 
 let inputDir = '';
 let outputDir = '';
@@ -55,6 +57,7 @@ function loadSettings() {
     if (s.trimMinFileMs != null) inTrimMinFileMs.value = s.trimMinFileMs;
     if (typeof s.trimConservative === 'boolean') chkTrimConservative.checked = s.trimConservative;
     if (typeof s.trimHPF === 'boolean') chkTrimHPF.checked = s.trimHPF;
+    if (typeof s.verboseLogs === 'boolean') chkVerbose.checked = s.verboseLogs;
   } catch {}
 }
 
@@ -77,6 +80,7 @@ function currentSettings() {
     trimMinFileMs: Math.max(0, Number(inTrimMinFileMs.value || 0)),
     trimConservative: !!chkTrimConservative.checked,
     trimHPF: !!chkTrimHPF.checked,
+    verboseLogs: !!chkVerbose.checked,
   };
 }
 
@@ -90,7 +94,7 @@ function setRunning(state) {
 }
 
 // Persist settings on change
-;[inLufs, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF].forEach((el) => el.addEventListener('change', saveSettings));
+;[inLufs, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose].forEach((el) => el.addEventListener('change', saveSettings));
 loadSettings();
 
 btnInput.addEventListener('click', async () => {
@@ -126,8 +130,12 @@ btnStart.addEventListener('click', async () => {
   fileList.innerHTML = '';
   overallBar.style.width = '0%';
   overallPct.textContent = '0%';
+  overallCount.textContent = '0/0';
   fileItems.clear();
   logView.textContent = '';
+  // Clear any existing previews
+  if (typeof previewList !== 'undefined') previewList.innerHTML = '';
+  if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
 
   setRunning(true);
   const s = currentSettings();
@@ -163,9 +171,12 @@ window.api.onFileStart(({ fileId, name }) => {
   ensureFileItem(fileId, name);
 });
 
-window.api.onProgress(({ fileId, filePct, overallPct: oPct }) => {
+window.api.onProgress(({ fileId, filePct, overallPct: oPct, completed, total }) => {
   overallBar.style.width = `${oPct.toFixed(1)}%`;
   overallPct.textContent = `${oPct.toFixed(1)}%`;
+  if (Number.isFinite(completed) && Number.isFinite(total)) {
+    overallCount.textContent = `${completed}/${total}`;
+  }
 
   // Lazily create item on first progress signal if needed
   let itemEl = fileItems.get(fileId);

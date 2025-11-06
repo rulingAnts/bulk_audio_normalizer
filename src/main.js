@@ -88,6 +88,10 @@ function run(cmd, args, options = {}) {
   return child;
 }
 
+function ffVerbosityArgs(verbose) {
+  return verbose ? ['-v', 'info'] : ['-hide_banner', '-nostats', '-v', 'error'];
+}
+
 function parseFfmpegTimeToSeconds(t) {
   // t like HH:MM:SS.xx
   const [hh, mm, ss] = t.split(':');
@@ -142,7 +146,7 @@ function buildTrimFilter(settings, durationSeconds) {
   return trim;
 }
 
-async function detectVoiceRegion({ input, durationSec, settings }) {
+async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
   // Build silencedetect filter (optional HPF first for robustness)
   const thDb = Number(settings.trimThresholdDb ?? -50);
   const minDurSec = Math.max(0.01, Number(settings.trimMinDurationMs ?? 200) / 1000);
@@ -156,8 +160,7 @@ async function detectVoiceRegion({ input, durationSec, settings }) {
 
   return await new Promise((resolve) => {
     const args = [
-      '-hide_banner',
-      '-nostats',
+      ...ffVerbosityArgs(settings?.verboseLogs),
       '-i', input,
       '-af', filters.join(','),
       '-f', 'null', '-'
@@ -167,6 +170,7 @@ async function detectVoiceRegion({ input, durationSec, settings }) {
     p.stderr.on('data', (data) => {
       const s = data.toString();
       stderr += s;
+      try { mainWindow.webContents.send('log', { fileId, phase: 'detect', line: s }); } catch {}
     });
     p.on('close', () => {
       const reStart = /silence_start: ([0-9]+\.?[0-9]*)/g;
@@ -233,7 +237,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   if (settings?.autoTrim) {
     const minFileMs = Math.max(0, Number(settings.trimMinFileMs ?? 800));
     if (durationSec * 1000 >= minFileMs) {
-      const region = await detectVoiceRegion({ input, durationSec, settings });
+  const region = await detectVoiceRegion({ input, durationSec, settings, fileId });
       if (region) {
         const padSec = Math.max(0, Number(settings.trimPadMs ?? 500) / 1000);
         const start = Math.max(0, region.start - padSec);
@@ -250,8 +254,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   pass1FilterParts.push(`loudnorm=I=${targetI}:TP=${targetTP}:LRA=11:print_format=json`);
 
   const pass1Args = [
-    '-hide_banner',
-    '-nostats',
+    ...ffVerbosityArgs(settings?.verboseLogs),
     '-i', input,
     '-af', pass1FilterParts.join(','),
     '-f', 'null', '-'
@@ -310,7 +313,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   filterParts.push(`alimiter=limit=${limiter}:level_in=1.0:level_out=1.0`);
 
   const pass2Args = [
-    '-hide_banner',
+    ...ffVerbosityArgs(settings?.verboseLogs),
     '-y',
     '-i', input,
     '-af', filterParts.join(','),
@@ -456,7 +459,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
     }
     const overallPct = Math.max(0, Math.min(100, (sumFrac / total) * 100));
 
-    mainWindow.webContents.send('progress-update', { fileId, filePct, overallPct });
+    mainWindow.webContents.send('progress-update', { fileId, filePct, overallPct, completed, total });
   };
 
   try {
