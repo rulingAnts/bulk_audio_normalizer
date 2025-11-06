@@ -110,16 +110,31 @@ function getDurationSeconds(filePath) {
   });
 }
 
+function buildTrimFilter(settings) {
+  if (!settings?.autoTrim) return null;
+  const padSec = Math.max(0, Number(settings.trimPadMs ?? 500) / 1000);
+  const minDurSec = Math.max(0.01, Number(settings.trimMinDurationMs ?? 200) / 1000);
+  const thDb = Number(settings.trimThresholdDb ?? -50);
+  const detect = (settings.trimDetect || 'rms') === 'peak' ? 'peak' : 'rms';
+  // Use the same parameters for start and stop; leave_silence pads each side equally
+  return `silenceremove=start_periods=1:start_duration=${minDurSec}:start_threshold=${thDb}dB:stop_periods=1:stop_duration=${minDurSec}:stop_threshold=${thDb}dB:leave_silence=${padSec}:detection=${detect}`;
+}
+
 async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, settings }) {
   const targetI = Number(settings?.lufsTarget ?? -16);
   const targetTP = Number(settings?.tpMargin ?? -1.0);
   const limiter = Number(settings?.limiterLimit ?? 0.97);
+  const trimFilter = buildTrimFilter(settings);
   // Pass 1: analyze loudness
+  const pass1FilterParts = [];
+  if (trimFilter) pass1FilterParts.push(trimFilter);
+  pass1FilterParts.push(`loudnorm=I=${targetI}:TP=${targetTP}:LRA=11:print_format=json`);
+
   const pass1Args = [
     '-hide_banner',
     '-nostats',
     '-i', input,
-    '-af', `loudnorm=I=${targetI}:TP=${targetTP}:LRA=11:print_format=json`,
+    '-af', pass1FilterParts.join(','),
     '-f', 'null', '-'
   ];
 
@@ -166,6 +181,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
 
   // Pass 2: apply normalization + limiter and force 16-bit PCM
   const filterParts = [];
+  if (trimFilter) filterParts.push(trimFilter);
   if (params) {
     filterParts.push(`loudnorm=I=${targetI}:TP=${targetTP}:LRA=11:measured_I=${params.measured_I}:measured_LRA=${params.measured_LRA}:measured_TP=${params.measured_TP}:measured_thresh=${params.measured_thresh}:offset=${params.offset}:linear=true:print_format=summary`);
   } else {

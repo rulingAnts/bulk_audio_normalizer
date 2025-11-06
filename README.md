@@ -46,6 +46,10 @@ This will package the app using electron-builder into platform-specific artifact
 - True-peak target in dBFS (default −1.0 dBFS)
 - Limiter ceiling as linear amplitude 0..1 (default 0.97)
 - Concurrency (number of files processed in parallel)
+- Auto-trim leading/trailing silence with adjustable parameters:
+	- Keep padding on each side (default 500 ms)
+	- Silence threshold in dBFS (default −50 dB)
+	- Minimum silence duration (default 200 ms)
 
 Settings are persisted locally per machine.
 

@@ -19,6 +19,10 @@ const inLufs = $('#lufsTarget');
 const inTP = $('#tpMargin');
 const inLimiter = $('#limiterLimit');
 const inConc = $('#concurrency');
+const chkAutoTrim = $('#autoTrim');
+const inTrimPadMs = $('#trimPadMs');
+const inTrimThresholdDb = $('#trimThresholdDb');
+const inTrimMinDurMs = $('#trimMinDurationMs');
 
 let inputDir = '';
 let outputDir = '';
@@ -36,6 +40,10 @@ function loadSettings() {
     if (s.tpMargin != null) inTP.value = s.tpMargin;
     if (s.limiterLimit != null) inLimiter.value = s.limiterLimit;
     if (s.concurrency != null) inConc.value = s.concurrency;
+    if (typeof s.autoTrim === 'boolean') chkAutoTrim.checked = s.autoTrim;
+    if (s.trimPadMs != null) inTrimPadMs.value = s.trimPadMs;
+    if (s.trimThresholdDb != null) inTrimThresholdDb.value = s.trimThresholdDb;
+    if (s.trimMinDurationMs != null) inTrimMinDurMs.value = s.trimMinDurationMs;
   } catch {}
 }
 
@@ -50,6 +58,11 @@ function currentSettings() {
     tpMargin: Number(inTP.value),
     limiterLimit: Number(inLimiter.value),
     concurrency: Math.max(1, Number(inConc.value || 1)),
+    autoTrim: !!chkAutoTrim.checked,
+    trimPadMs: Math.max(0, Number(inTrimPadMs.value || 0)),
+    trimThresholdDb: Number(inTrimThresholdDb.value),
+    trimMinDurationMs: Math.max(0, Number(inTrimMinDurMs.value || 0)),
+    trimDetect: 'rms',
   };
 }
 
@@ -62,7 +75,7 @@ function setRunning(state) {
 }
 
 // Persist settings on change
-;[inLufs, inTP, inLimiter, inConc].forEach((el) => el.addEventListener('change', saveSettings));
+;[inLufs, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs].forEach((el) => el.addEventListener('change', saveSettings));
 loadSettings();
 
 btnInput.addEventListener('click', async () => {

@@ -29,8 +29,10 @@ section { padding: 16px 20px; }
 footer { padding: 12px 20px; border-top: 1px solid #eee; color: #777; }
 
 .settings h2, .logs h2 { margin: 0 0 10px; font-size: 16px; }
-.settings .grid { display: grid; grid-template-columns: 200px 1fr; gap: 8px 12px; align-items: center; }
+.settings .grid { display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; }
 .settings input[type=number] { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
+.settings input[type=checkbox] { width: 16px; height: 16px; }
+.settings .grid .sep { border-top: 1px dashed #ddd; }
 
 .logs .log-actions { margin-bottom: 6px; }
 .log-view { max-height: 220px; overflow: auto; border: 1px solid #eee; border-radius: 8px; background: #0c0c0c; color: #d0d0d0; padding: 8px; white-space: pre-wrap; word-break: break-word; }

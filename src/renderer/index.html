@@ -57,6 +57,20 @@
 
         <label for="concurrency">Concurrency</label>
         <input id="concurrency" type="number" min="1" max="16" value="4" />
+        
+        <div class="sep" style="grid-column: 1 / -1; height: 8px;"></div>
+
+        <label for="autoTrim">Auto-trim leading/trailing silence</label>
+        <input id="autoTrim" type="checkbox" checked />
+
+        <label for="trimPadMs">Keep padding each side (ms)</label>
+        <input id="trimPadMs" type="number" min="0" value="500" />
+
+        <label for="trimThresholdDb">Silence threshold (dBFS)</label>
+        <input id="trimThresholdDb" type="number" step="1" value="-50" />
+
+        <label for="trimMinDurationMs">Minimum silence duration (ms)</label>
+        <input id="trimMinDurationMs" type="number" min="0" value="200" />
       </div>
       <div class="hint">Tip: Lower limiter ceiling (e.g., 0.97) for extra headroom. TP is in dBFS (negative values).</div>
     </section>
