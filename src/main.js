@@ -89,7 +89,9 @@ function run(cmd, args, options = {}) {
 }
 
 function ffVerbosityArgs(verbose) {
-  return verbose ? ['-v', 'info'] : ['-hide_banner', '-nostats', '-v', 'error'];
+  // Keep periodic progress stats available even when not verbose (no -nostats),
+  // otherwise we can't parse time=... for progress bars.
+  return verbose ? ['-v', 'info'] : ['-hide_banner', '-v', 'error'];
 }
 
 function parseFfmpegTimeToSeconds(t) {
@@ -234,6 +236,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   const durationSec = Number(settings?.currentFileDurationSec || 0) || 0;
 
   let trimFilter = null;
+  try { mainWindow.webContents.send('phase-event', { fileId, phase: 'detect', status: 'start' }); } catch {}
   if (settings?.autoTrim) {
     const minFileMs = Math.max(0, Number(settings.trimMinFileMs ?? 800));
     if (durationSec * 1000 >= minFileMs) {
@@ -248,7 +251,9 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       }
     }
   }
+  try { mainWindow.webContents.send('phase-event', { fileId, phase: 'detect', status: 'done' }); } catch {}
   // Pass 1: analyze loudness
+  try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'start' }); } catch {}
   const pass1FilterParts = [];
   if (trimFilter) pass1FilterParts.push(trimFilter);
   pass1FilterParts.push(`loudnorm=I=${targetI}:TP=${targetTP}:LRA=11:print_format=json`);
@@ -273,12 +278,20 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       analysisJson += s;
       // stream logs
       try { mainWindow.webContents.send('log', { fileId, phase: 'analyze', line: s }); } catch {}
+      // Try to parse progress if available
+      const m = s.match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
+      if (m && Number.isFinite(durationSec) && durationSec > 0) {
+        const sec = parseFloat(parseFfmpegTimeToSeconds(m[1]).toFixed(2));
+        const pct = Math.max(0, Math.min(100, (sec / durationSec) * 100));
+        try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'progress', pct }); } catch {}
+      }
     });
     p1.on('error', reject);
     p1.on('close', (code) => {
       if (code !== 0 && !(activeJobs.get(fileId)?.canceled)) {
         return reject(new Error(`ffmpeg pass1 failed (${code})`));
       }
+      try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'done', pct: 100 }); } catch {}
       resolve();
     });
   });
@@ -302,6 +315,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   }
 
   // Pass 2: apply normalization + limiter and force 16-bit PCM
+  try { mainWindow.webContents.send('phase-event', { fileId, phase: 'render', status: 'start' }); } catch {}
   const filterParts = [];
   if (trimFilter) filterParts.push(trimFilter);
   if (params) {
@@ -334,6 +348,11 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       if (m && onProgress) {
         onProgress(m[1]);
       }
+      if (m && Number.isFinite(durationSec) && durationSec > 0) {
+        const sec = parseFloat(parseFfmpegTimeToSeconds(m[1]).toFixed(2));
+        const pct = Math.max(0, Math.min(100, (sec / durationSec) * 100));
+        try { mainWindow.webContents.send('phase-event', { fileId, phase: 'render', status: 'progress', pct }); } catch {}
+      }
       try { mainWindow.webContents.send('log', { fileId, phase: 'render', line: s }); } catch {}
     });
 
@@ -342,6 +361,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       if (code !== 0 && !(activeJobs.get(fileId)?.canceled)) {
         return reject(new Error(`ffmpeg pass2 failed (${code})`));
       }
+      try { mainWindow.webContents.send('phase-event', { fileId, phase: 'render', status: 'done', pct: 100 }); } catch {}
       resolve();
     });
   });
@@ -438,11 +458,16 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
   const perFileDuration = new Map();
   const perFileProgress = new Map(); // seconds processed
 
+  // Notify renderer about batch start so it can show 0/N immediately
+  try { mainWindow.webContents.send('batch-start', { total }); } catch {}
+  try { mainWindow.webContents.send('log', { fileId: 'batch', phase: 'info', line: `Discovered ${total} WAV file(s).` }); } catch {}
+
   // Pre-fetch durations in parallel (but not too many at once)
   await limitConcurrency(items, concurrency, async (item) => {
     const dur = await getDurationSeconds(item.in);
     perFileDuration.set(item.id, dur > 0 ? dur : 1);
   });
+  try { mainWindow.webContents.send('log', { fileId: 'batch', phase: 'info', line: `Got durations for all files. Starting processing with concurrency=${concurrency}.` }); } catch {}
 
   let completed = 0;
 
@@ -465,8 +490,9 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
   try {
     await limitConcurrency(items, concurrency, async (item) => {
       // Notify renderer this file is starting
-      const displayName = path.relative(inputDir, item.in);
+  const displayName = path.relative(inputDir, item.in);
       mainWindow.webContents.send('file-start', { fileId: item.id, name: displayName });
+  try { mainWindow.webContents.send('log', { fileId: item.id, phase: 'start', line: `Processing ${displayName}` }); } catch {}
       const dur = perFileDuration.get(item.id) || 1;
 
       await loudnormTwoPassWithLimiter({

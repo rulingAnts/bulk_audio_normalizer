@@ -26,6 +26,12 @@ section { padding: 16px 20px; }
 .file-item .progress { height: 8px; margin-top: 6px; }
 .file-item.done .bar { background: #2ea043; }
 .file-item.error .bar { background: #d1242f; }
+.phase-bars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.phase { display: grid; grid-template-rows: auto 1fr; gap: 4px; }
+.phase .label { font-size: 11px; color: #555; }
+.progress.small { height: 6px; }
+.bar.active { background: repeating-linear-gradient(45deg, #2ea043, #2ea043 8px, #26913b 8px, #26913b 16px); animation: move 0.6s linear infinite; }
+@keyframes move { from { background-position: 0 0; } to { background-position: 16px 0; } }
 footer { padding: 12px 20px; border-top: 1px solid #eee; color: #777; }
 
 .settings summary, .logs h2 { margin: 0 0 10px; font-size: 16px; cursor: pointer; user-select: none; }
@@ -52,4 +58,4 @@ footer { padding: 12px 20px; border-top: 1px solid #eee; color: #777; }
 .controls .spacer { flex: 1; }
 
 .logs .log-actions { margin-bottom: 6px; }
-.log-view { max-height: 220px; overflow: auto; border: 1px solid #eee; border-radius: 8px; background: #0c0c0c; color: #d0d0d0; padding: 8px; white-space: pre-wrap; word-break: break-word; }
+.log-view { min-height: 140px; max-height: 280px; overflow: auto; border: 1px solid #eee; border-radius: 8px; background: #0c0c0c; color: #d0d0d0; padding: 8px; white-space: pre-wrap; word-break: break-word; }

@@ -14,8 +14,10 @@ contextBridge.exposeInMainWorld('api', {
   onFileStart: (cb) => ipcRenderer.on('file-start', (_e, data) => cb(data)),
   onFileDone: (cb) => ipcRenderer.on('file-done', (_e, data) => cb(data)),
   onAllDone: (cb) => ipcRenderer.on('all-done', (_e, data) => cb(data)),
+  onBatchStart: (cb) => ipcRenderer.on('batch-start', (_e, data) => cb(data)),
   onError: (cb) => ipcRenderer.on('error', (_e, data) => cb(data)),
   onLog: (cb) => ipcRenderer.on('log', (_e, data) => cb(data)),
+  onPhaseEvent: (cb) => ipcRenderer.on('phase-event', (_e, data) => cb(data)),
   onPreviewFileDone: (cb) => ipcRenderer.on('preview-file-done', (_e, data) => cb(data)),
   onPreviewDone: (cb) => ipcRenderer.on('preview-done', (_e, data) => cb(data)),
 });

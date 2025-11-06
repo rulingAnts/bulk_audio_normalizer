@@ -161,6 +161,20 @@ function ensureFileItem(id, name) {
       <div class="pct" data-role="pct">0%</div>
     </div>
     <div class="progress"><div class="bar" data-role="bar" style="width:0%"></div></div>
+    <div class="phase-bars">
+      <div class="phase">
+        <span class="label">Detect</span>
+        <div class="progress small"><div class="bar" data-role="phase-detect" style="width:0%"></div></div>
+      </div>
+      <div class="phase">
+        <span class="label">Analyze</span>
+        <div class="progress small"><div class="bar" data-role="phase-analyze" style="width:0%"></div></div>
+      </div>
+      <div class="phase">
+        <span class="label">Render</span>
+        <div class="progress small"><div class="bar" data-role="phase-render" style="width:0%"></div></div>
+      </div>
+    </div>
   `;
   fileList.appendChild(el);
   fileItems.set(id, el);
@@ -169,6 +183,12 @@ function ensureFileItem(id, name) {
 
 window.api.onFileStart(({ fileId, name }) => {
   ensureFileItem(fileId, name);
+});
+
+window.api.onBatchStart(({ total }) => {
+  if (Number.isFinite(total)) {
+    overallCount.textContent = `0/${total}`;
+  }
 });
 
 window.api.onProgress(({ fileId, filePct, overallPct: oPct, completed, total }) => {
@@ -195,6 +215,11 @@ window.api.onFileDone(({ fileId }) => {
     const barEl = itemEl.querySelector('[data-role="bar"]');
     pctEl.textContent = '100%';
     barEl.style.width = '100%';
+    // Mark all phases complete if not already
+    ['phase-detect','phase-analyze','phase-render'].forEach((role) => {
+      const b = itemEl.querySelector(`[data-role="${role}"]`);
+      if (b) b.style.width = '100%';
+    });
   }
 });
 
@@ -204,6 +229,25 @@ window.api.onAllDone(() => {
 
 window.api.onError(({ message }) => {
   alert(message);
+});
+
+window.api.onPhaseEvent(({ fileId, phase, status, pct }) => {
+  const itemEl = fileItems.get(fileId);
+  if (!itemEl) return;
+  const roleMap = { detect: 'phase-detect', analyze: 'phase-analyze', render: 'phase-render' };
+  const role = roleMap[phase];
+  if (!role) return;
+  const bar = itemEl.querySelector(`[data-role="${role}"]`);
+  if (!bar) return;
+  if (status === 'start') {
+    bar.style.width = '0%';
+    bar.classList.add('active');
+  } else if (status === 'progress' && Number.isFinite(pct)) {
+    bar.style.width = `${pct.toFixed(1)}%`;
+  } else if (status === 'done') {
+    bar.style.width = '100%';
+    bar.classList.remove('active');
+  }
 });
 
 window.api.onLog(({ fileId, phase, line }) => {
