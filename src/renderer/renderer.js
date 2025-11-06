@@ -11,6 +11,7 @@ const outputValidation = $('#outputValidation');
 const overallBar = $('#overallBar');
 const overallPct = $('#overallPct');
 const overallCount = $('#overallCount');
+const batchStatus = $('#batchStatus');
 const fileList = $('#fileList');
 const logView = $('#logView');
 const btnClearLog = $('#btnClearLog');
@@ -38,6 +39,21 @@ let inputDir = '';
 let outputDir = '';
 let running = false;
 let fileItems = new Map(); // id -> DOM refs
+const phaseActive = { detect: 0, analyze: 0, render: 0 };
+
+function updateBatchStatus() {
+  if (phaseActive.render > 0) {
+    batchStatus.textContent = 'Rendering…';
+  } else if (phaseActive.analyze > 0) {
+    batchStatus.textContent = 'Analyzing…';
+  } else if (phaseActive.detect > 0) {
+    batchStatus.textContent = 'Detecting…';
+  } else if (running) {
+    batchStatus.textContent = 'Queued…';
+  } else {
+    // idle
+  }
+}
 
 const SETTINGS_KEY = 'ban_settings_v1';
 
@@ -136,6 +152,9 @@ btnStart.addEventListener('click', async () => {
   // Clear any existing previews
   if (typeof previewList !== 'undefined') previewList.innerHTML = '';
   if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
+  // Reset batch status
+  phaseActive.detect = phaseActive.analyze = phaseActive.render = 0;
+  batchStatus.textContent = 'Preparing…';
 
   setRunning(true);
   const s = currentSettings();
@@ -149,6 +168,7 @@ btnStart.addEventListener('click', async () => {
 btnCancel.addEventListener('click', async () => {
   await window.api.cancelProcessing();
   setRunning(false);
+  batchStatus.textContent = 'Canceled';
 });
 
 function ensureFileItem(id, name) {
@@ -189,6 +209,7 @@ window.api.onBatchStart(({ total }) => {
   if (Number.isFinite(total)) {
     overallCount.textContent = `0/${total}`;
   }
+  if (running) batchStatus.textContent = 'Queued…';
 });
 
 window.api.onProgress(({ fileId, filePct, overallPct: oPct, completed, total }) => {
@@ -225,10 +246,12 @@ window.api.onFileDone(({ fileId }) => {
 
 window.api.onAllDone(() => {
   setRunning(false);
+  batchStatus.textContent = 'Completed';
 });
 
 window.api.onError(({ message }) => {
   alert(message);
+  batchStatus.textContent = 'Error';
 });
 
 window.api.onPhaseEvent(({ fileId, phase, status, pct }) => {
@@ -242,11 +265,15 @@ window.api.onPhaseEvent(({ fileId, phase, status, pct }) => {
   if (status === 'start') {
     bar.style.width = '0%';
     bar.classList.add('active');
+    if (phase in phaseActive) phaseActive[phase] = Math.max(0, (phaseActive[phase] || 0) + 1);
+    updateBatchStatus();
   } else if (status === 'progress' && Number.isFinite(pct)) {
     bar.style.width = `${pct.toFixed(1)}%`;
   } else if (status === 'done') {
     bar.style.width = '100%';
     bar.classList.remove('active');
+    if (phase in phaseActive) phaseActive[phase] = Math.max(0, (phaseActive[phase] || 0) - 1);
+    updateBatchStatus();
   }
 });
 
