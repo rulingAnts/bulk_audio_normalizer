@@ -1,0 +1,36 @@
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; margin: 0; color: #111; background: #fff; }
+header { padding: 16px 20px; border-bottom: 1px solid #eee; }
+h1 { margin: 0 0 4px; font-size: 20px; }
+header p { margin: 0; color: #555; }
+section { padding: 16px 20px; }
+.controls .picker { margin-bottom: 12px; }
+.controls label { display: block; font-weight: 600; margin-bottom: 4px; }
+.controls .row { display: flex; gap: 8px; }
+.controls input[type=text] { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
+.controls button { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; background: #f5f5f5; cursor: pointer; }
+.controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+.hint { margin-top: 6px; font-size: 12px; color: #777; min-height: 16px; }
+.actions { margin-top: 8px; display: flex; gap: 8px; }
+
+.overall .label-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.progress { width: 100%; height: 12px; background: #eee; border-radius: 6px; overflow: hidden; }
+.bar { height: 100%; background: linear-gradient(90deg, #2ea043, #2ea043); }
+
+.files h2 { margin: 0 0 10px; font-size: 16px; }
+.file-list { max-height: 420px; overflow: auto; border: 1px solid #eee; border-radius: 8px; padding: 8px; background: #fafafa; }
+.file-item { padding: 6px; border-radius: 6px; background: #fff; margin-bottom: 8px; box-shadow: 0 1px 0 rgba(0,0,0,0.04); }
+.file-item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.file-item .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-item .pct { min-width: 48px; text-align: right; color: #333; }
+.file-item .progress { height: 8px; margin-top: 6px; }
+.file-item.done .bar { background: #2ea043; }
+.file-item.error .bar { background: #d1242f; }
+footer { padding: 12px 20px; border-top: 1px solid #eee; color: #777; }
+
+.settings h2, .logs h2 { margin: 0 0 10px; font-size: 16px; }
+.settings .grid { display: grid; grid-template-columns: 200px 1fr; gap: 8px 12px; align-items: center; }
+.settings input[type=number] { padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
+
+.logs .log-actions { margin-bottom: 6px; }
+.log-view { max-height: 220px; overflow: auto; border: 1px solid #eee; border-radius: 8px; background: #0c0c0c; color: #d0d0d0; padding: 8px; white-space: pre-wrap; word-break: break-word; }
