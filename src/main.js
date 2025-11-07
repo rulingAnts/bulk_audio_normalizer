@@ -15,6 +15,47 @@ let mainWindow;
 let previewWindow;
 let activeJobs = new Map(); // key: fileId -> { procs: [ChildProcess], canceled: boolean }
 let cancelAll = false; // batch-level cancel flag for immediate stop
+// CPU sampling state for Windows-friendly throttling
+let lastCpuSample = null; // { idle: number, total: number }
+
+function sampleCpu() {
+  const cpus = os.cpus() || [];
+  if (!cpus.length) return null;
+  let idle = 0;
+  let total = 0;
+  for (const c of cpus) {
+    const t = c.times;
+    const ti = (t.idle || 0);
+    const tt = (t.user || 0) + (t.nice || 0) + (t.sys || 0) + (t.irq || 0) + (t.idle || 0);
+    idle += ti;
+    total += tt;
+  }
+  return { idle, total };
+}
+
+function getCpuLoadPercent() {
+  // On non-Windows, os.loadavg()[0] is a reasonable proxy normalized by cores
+  if (process.platform !== 'win32') {
+    const cores = Math.max(1, (os.cpus() || []).length || 1);
+    const [l1] = os.loadavg();
+    if (l1 && cores) return Math.max(0, Math.min(100, (l1 / cores) * 100));
+    // fall through to time-based calc if loadavg is 0 or unavailable
+  }
+  // Use time-based CPU sampling (works cross-platform, needed for Windows)
+  const cur = sampleCpu();
+  if (!cur) return 0;
+  if (!lastCpuSample) {
+    lastCpuSample = cur;
+    return 0; // need a baseline
+  }
+  const idleDelta = cur.idle - lastCpuSample.idle;
+  const totalDelta = cur.total - lastCpuSample.total;
+  lastCpuSample = cur;
+  if (totalDelta <= 0) return 0;
+  const busy = Math.max(0, totalDelta - Math.max(0, idleDelta));
+  const pct = (busy / totalDelta) * 100;
+  return Math.max(0, Math.min(100, pct));
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -910,8 +951,8 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
   let lastAnnounce = '';
   const monitor = setInterval(() => {
     try {
-      const [l1] = os.loadavg();
-      const loadNorm = (l1 || 0) / cores; // ~1.0 means fully loaded
+      const cpuPct = getCpuLoadPercent();
+      const loadNorm = Math.max(0, Math.min(1, cpuPct / 100)); // 0..1
       const freeMem = os.freemem();
       const totalMem = os.totalmem();
       const freePct = totalMem > 0 ? freeMem / totalMem : 1;

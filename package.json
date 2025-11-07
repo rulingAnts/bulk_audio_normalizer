@@ -28,11 +28,16 @@
       "**/node_modules/ffprobe-static/**"
     ],
     "mac": {
-      "target": "dmg",
-      "icon": "build/icons/icon.icns"
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "build/icons/icon.icns",
+      "universalApp": true
     },
     "win": {
-      "target": "portable",
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ],
       "icon": "build/icons/icon.ico"
     },
     "linux": {

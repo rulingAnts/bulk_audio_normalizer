@@ -34,6 +34,17 @@ const btnPreview = $('#btnPreview');
 const previewCount = $('#previewCount');
 const previewList = $('#previewList');
 const previewInfo = $('#previewInfo');
+// Cross-platform converter for local file paths to file:// URLs
+function toFileUrl(p) {
+  if (!p) return '';
+  if (p.startsWith('file://')) return p;
+  let pathStr = String(p);
+  // Normalize Windows backslashes to forward slashes
+  pathStr = pathStr.replace(/\\/g, '/');
+  // Ensure drive letter has a preceding slash on Windows (e.g., C:/ -> /C:/)
+  if (/^[A-Za-z]:\//.test(pathStr)) pathStr = '/' + pathStr;
+  return 'file://' + encodeURI(pathStr);
+}
 
 // Settings inputs
 const inLufs = $('#lufsTarget');
@@ -590,7 +601,7 @@ window.api.onPreviewFileDone(({ original, preview, rel }) => {
         }),
       ],
     });
-    ws.load('file://' + url);
+    ws.load(toFileUrl(url));
     return ws;
   };
 
