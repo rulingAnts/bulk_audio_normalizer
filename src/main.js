@@ -118,8 +118,29 @@ function ensureDir(dirPath) {
 }
 
 function run(cmd, args, options = {}) {
-  const child = spawn(cmd, args, { ...options });
+  // Spawn children in their own process group when possible so we can kill the tree instantly
+  const child = spawn(cmd, args, {
+    detached: process.platform !== 'win32',
+    windowsHide: true,
+    ...options,
+  });
   return child;
+}
+
+function killProcessTree(child) {
+  if (!child || !child.pid) return;
+  try {
+    if (process.platform === 'win32') {
+      // Force kill entire tree on Windows
+      spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true });
+      try { child.kill('SIGKILL'); } catch {}
+    } else {
+      // Kill the process group if detached, else the process
+      try { process.kill(-child.pid, 'SIGKILL'); } catch {
+        try { child.kill('SIGKILL'); } catch {}
+      }
+    }
+  } catch {}
 }
 
 function ffVerbosityArgs(verbose) {
@@ -432,6 +453,7 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
     const p = run(ffmpegStatic, args);
     const job = activeJobs.get(fileId);
     if (job) job.procs.push(p);
+    let closed = false;
     let stderr = '';
     p.stderr.on('data', (data) => {
       const s = data.toString();
@@ -439,6 +461,7 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
       try { mainWindow.webContents.send('log', { fileId, phase: 'detect', line: s }); } catch {}
     });
     p.on('close', () => {
+      closed = true;
       const reStart = /silence_start: ([0-9]+\.?[0-9]*)/g;
       const reEnd = /silence_end: ([0-9]+\.?[0-9]*)/g;
       const silence = [];
@@ -491,7 +514,8 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
       resolve({ start, end });
     });
     if (cancelAll) {
-      try { p.kill('SIGKILL'); } catch {}
+      killProcessTree(p);
+      setTimeout(() => { if (!closed) resolve(null); }, 800);
     }
   });
 }
@@ -578,6 +602,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
 
       const job = activeJobs.get(fileId);
       if (job) job.procs.push(p1);
+      let closed = false;
 
       p1.stderr.on('data', (data) => {
         const s = data.toString();
@@ -592,12 +617,17 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       });
       p1.on('error', reject);
       p1.on('close', (code) => {
+        closed = true;
         if (code !== 0 && !(activeJobs.get(fileId)?.canceled)) {
           return reject(new Error(`ffmpeg pass1 failed (${code})`));
         }
         try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'done', pct: 100 }); } catch {}
         resolve();
       });
+      if (cancelAll) {
+        killProcessTree(p1);
+        setTimeout(() => { if (!closed) resolve(); }, 800);
+      }
     });
 
     const jsonMatch = analysisJson.match(/\{[\s\S]*?\}/g);
@@ -634,6 +664,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
 
       const job = activeJobs.get(fileId);
       if (job) job.procs.push(p1);
+      let closed = false;
 
       let lastMax = null;
       p1.stderr.on('data', (data) => {
@@ -650,6 +681,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       });
       p1.on('error', reject);
       p1.on('close', (code) => {
+        closed = true;
         if (code !== 0 && !(activeJobs.get(fileId)?.canceled)) {
           return reject(new Error(`ffmpeg peak analysis failed (${code})`));
         }
@@ -657,6 +689,10 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
         try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'done', pct: 100 }); } catch {}
         resolve();
       });
+      if (cancelAll) {
+        killProcessTree(p1);
+        setTimeout(() => { if (!closed) resolve(); }, 800);
+      }
     });
   } else {
     // Keep UI consistent: mark analyze as instant-done in fast mode
@@ -712,6 +748,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
 
     const job = activeJobs.get(fileId);
     if (job) job.procs.push(p2);
+    let closed = false;
 
     p2.stderr.on('data', (data) => {
       const s = data.toString();
@@ -729,6 +766,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
 
     p2.on('error', reject);
     p2.on('close', (code) => {
+      closed = true;
       if (code !== 0 && !(activeJobs.get(fileId)?.canceled)) {
         return reject(new Error(`ffmpeg pass2 failed (${code})`));
       }
@@ -736,7 +774,8 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       resolve();
     });
     if (cancelAll) {
-      try { p2.kill('SIGKILL'); } catch {}
+      killProcessTree(p2);
+      setTimeout(() => { if (!closed) resolve(); }, 800);
     }
   });
 }
@@ -909,6 +948,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
   try { mainWindow.webContents.send('log', { fileId: item.id, phase: 'start', line: `Processing ${displayName}` }); } catch {}
       const dur = perFileDuration.get(item.id) || 1;
 
+      if (cancelAll) return;
       await loudnormTwoPassWithLimiter({
         input: item.in,
         output: item.out,
