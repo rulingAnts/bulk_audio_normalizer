@@ -36,15 +36,22 @@
       const rel = document.getElementById('release-page-link');
       const rel2 = document.getElementById('release-page-link-footer');
 
-      if (macAsset) enable(macLink, macAsset.browser_download_url);
-      if (winAsset) enable(winLink, winAsset.browser_download_url);
+      // Display tag name in buttons if available
+      const tag = release.tag_name || release.name || '';
+      if (tag) {
+        if (macLink) macLink.textContent = `Download macOS (${tag})`;
+        if (winLink) winLink.textContent = `Download Windows (${tag})`;
+      }
+
+  if (macAsset) enable(macLink, macAsset.browser_download_url);
+  if (winAsset) enable(winLink, winAsset.browser_download_url);
       if (release.html_url) {
         if (rel) rel.href = release.html_url;
         if (rel2) rel2.href = release.html_url;
       }
 
-      if (!macAsset && macLink) macLink.title = 'Click to view latest releases';
-      if (!winAsset && winLink) winLink.title = 'Click to view latest releases';
+  if (!macAsset && macLink) macLink.title = 'No direct DMG asset found; click to view latest releases';
+  if (!winAsset && winLink) winLink.title = 'No direct EXE asset found; click to view latest releases';
 
       if (!macAsset || !winAsset) {
         // Ensure we still have a working path

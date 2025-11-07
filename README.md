@@ -2,6 +2,9 @@
 
 Electron app to batch‑process WAV files for linguistics and fieldwork. Supports two normalization intents — Peak dBFS (default, for acoustic analysis) and LUFS (for consistent listening) — plus flexible bit‑depth output (16‑bit, 24‑bit, or preserve original) with a safety limiter available in LUFS mode. Built for very large batches of short files with responsive UI and careful performance controls.
 
+> Looking for a simple download (no building)? Visit the user site: **GitHub Pages version of this repository's `docs/` folder** (enable Pages -> Deploy from `main` / `docs`). Once enabled it will be available at:
+> `https://rulingAnts.github.io/bulk_audio_normalizer/` — includes direct download buttons, screenshots, and a beginner Quick Start guide.
+
 ## What it does
 
 - Scans an input folder (recursively) for `.wav`/`.wave` files
