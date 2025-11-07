@@ -73,6 +73,37 @@ let running = false;
 let stopping = false;
 let fileItems = new Map(); // id -> DOM refs
 let autoScrollFiles = true;
+// Resume/session state
+// No resume mode: each Start requires an empty output folder and resets UI
+
+function setSettingsLocked(locked) {
+  const ctrls = [
+    profileSelect, bitDepthSelect, normModeSelect, inLufs, inPeakTarget, chkPeakOnlyBoost, inTP, inLimiter,
+    inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative,
+    chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim
+  ];
+  ctrls.forEach((el) => { if (el) el.disabled = !!locked; });
+}
+
+function clearUI() {
+  fileList.innerHTML = '';
+  overallBar.style.width = '0%';
+  overallPct.textContent = '0%';
+  overallCount.textContent = '0/0';
+  fileItems.clear();
+  logView.textContent = '';
+  if (typeof previewList !== 'undefined') previewList.innerHTML = '';
+  if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
+  phaseActive.detect = phaseActive.analyze = phaseActive.render = 0;
+  batchStatus.textContent = '';
+  if (stopStatus) stopStatus.textContent = '';
+}
+
+function resetSessionAndUI() {
+  setSettingsLocked(false);
+  btnStart.textContent = 'Start';
+  clearUI();
+}
 
 // Auto-scroll file list to bottom unless the user scrolls up
 fileList.addEventListener('scroll', () => {
@@ -337,6 +368,14 @@ btnInput.addEventListener('click', async () => {
   if (dir) {
     inputDir = dir;
     inputPath.value = dir;
+    // Changing input requires empty output before new start and clears UI
+    resetSessionAndUI();
+    if (outputDir) {
+      const empty = await window.api.validateOutputEmpty(outputDir);
+      outputValidation.textContent = empty ? 'Output folder is empty ✓' : 'Output folder must be empty.';
+      outputValidation.style.color = empty ? '#2ea043' : '#d1242f';
+      btnStart.disabled = (running || stopping) || !inputDir || !outputDir || !empty;
+    }
   }
   btnStart.disabled = running || !inputDir || !outputDir;
 });
@@ -346,15 +385,12 @@ btnOutput.addEventListener('click', async () => {
   if (dir) {
     outputDir = dir;
     outputPath.value = dir;
+    // Selecting a new output enforces empty before (re)starting and clears UI
+    resetSessionAndUI();
     const empty = await window.api.validateOutputEmpty(dir);
-    if (empty) {
-      outputValidation.textContent = 'Output folder is empty ✓';
-      outputValidation.style.color = '#2ea043';
-    } else {
-      outputValidation.textContent = 'Output folder not empty: existing outputs will be skipped (resume).';
-      outputValidation.style.color = '#6e7781';
-    }
-    btnStart.disabled = (running || stopping) || !inputDir || !outputDir;
+    outputValidation.textContent = empty ? 'Output folder is empty ✓' : 'Output folder must be empty.';
+    outputValidation.style.color = empty ? '#2ea043' : '#d1242f';
+    btnStart.disabled = (running || stopping) || !inputDir || !outputDir || !empty;
   }
 });
 
@@ -366,6 +402,8 @@ btnClearOutput.addEventListener('click', async () => {
   if (res) {
     outputValidation.textContent = 'Output folder is empty ✓';
     outputValidation.style.color = '#2ea043';
+    // Clearing output resets session and UI
+    resetSessionAndUI();
   } else {
     outputValidation.textContent = 'Could not clear output folder.';
     outputValidation.style.color = '#d1242f';
@@ -375,18 +413,22 @@ btnClearOutput.addEventListener('click', async () => {
 
 btnStart.addEventListener('click', async () => {
   if (!inputDir || !outputDir) return;
-  // Resume is supported: if not empty, existing outputs will be skipped.
-
+  // Enforce empty output before starting; no resume support
+  const empty = await window.api.validateOutputEmpty(outputDir);
+  if (!empty) {
+    outputValidation.textContent = 'Output folder must be empty.';
+    outputValidation.style.color = '#d1242f';
+    return;
+  }
+  // Clear UI for a fresh run
   fileList.innerHTML = '';
   overallBar.style.width = '0%';
   overallPct.textContent = '0%';
   overallCount.textContent = '0/0';
   fileItems.clear();
   logView.textContent = '';
-  // Clear any existing previews
   if (typeof previewList !== 'undefined') previewList.innerHTML = '';
   if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
-  // Reset batch status
   phaseActive.detect = phaseActive.analyze = phaseActive.render = 0;
   batchStatus.textContent = 'Preparing…';
   if (stopStatus) stopStatus.textContent = '';
@@ -461,15 +503,16 @@ function fmtHMS(ms) {
 }
 
 window.api.onProgress(({ fileId, filePct, overallPct: oPct, completed, total }) => {
-  overallBar.style.width = `${oPct.toFixed(1)}%`;
-  overallPct.textContent = `${oPct.toFixed(1)}%`;
+  const pctVal = Number.isFinite(oPct) ? oPct : 0;
+  overallBar.style.width = `${pctVal.toFixed(1)}%`;
+  overallPct.textContent = `${pctVal.toFixed(1)}%`;
   if (Number.isFinite(completed) && Number.isFinite(total)) {
     overallCount.textContent = `${completed}/${total}`;
   }
   // Time estimates
   if (batchStartTs) {
     const elapsed = Date.now() - batchStartTs;
-    const pct = Math.max(0.1, Math.min(99.9, oPct));
+    const pct = Math.max(0.1, Math.min(99.9, pctVal));
     const eta = elapsed * (100 / pct - 1);
     const overallTime = document.querySelector('#overallTime');
     if (overallTime) overallTime.textContent = `Elapsed ${fmtHMS(elapsed)} • ETA ${fmtHMS(eta)}`;
@@ -505,6 +548,17 @@ window.api.onStopped(() => {
   batchStatus.textContent = 'Stopped';
   if (stopStatus) stopStatus.textContent = '';
   throttleInfo = '';
+  // Enforce empty output before allowing new Start (no resume)
+  (async () => {
+    if (outputDir) {
+      const empty = await window.api.validateOutputEmpty(outputDir);
+      outputValidation.textContent = empty ? 'Output folder is empty ✓' : 'Output folder must be empty.';
+      outputValidation.style.color = empty ? '#2ea043' : '#d1242f';
+      btnStart.disabled = !empty || !inputDir || !outputDir;
+    } else {
+      btnStart.disabled = !inputDir || !outputDir;
+    }
+  })();
 });
 
 window.api.onError(({ message }) => {

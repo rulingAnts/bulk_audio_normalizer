@@ -258,13 +258,16 @@ function getDurationSeconds(filePath, fileId = null) {
     }
 
     let buf = '';
+    let closed = false;
     proc.stdout.on('data', (d) => (buf += d.toString()));
     proc.on('close', () => {
+      closed = true;
       const num = parseFloat(buf.trim());
       resolve(Number.isFinite(num) ? num : 0);
     });
     if (cancelAll) {
-      try { proc.kill('SIGKILL'); } catch {}
+      try { killProcessTree(proc); } catch {}
+      setTimeout(() => { if (!closed) resolve(0); }, 800);
     }
   });
 }
@@ -491,7 +494,7 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
       '-af', filters.join(','),
       '-f', 'null', '-'
     ];
-    const p = run(ffmpegStatic, args);
+  const p = run(ffmpegStatic, args);
     const job = activeJobs.get(fileId);
     if (job) job.procs.push(p);
     let closed = false;
@@ -562,6 +565,7 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
 }
 
 async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, settings }) {
+  if (cancelAll || (activeJobs.get(fileId)?.canceled)) return;
   const inputFmt = getWavFormatInfo(input);
   const outCodec = chooseOutputCodec({ targetBitDepth: settings?.targetBitDepth ?? 16, inputFmt });
   const targetI = Number(settings?.lufsTarget ?? -16);
@@ -576,6 +580,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   let trimFilter = null;
   let seekStart = 0;
   let seekEnd = durationSec;
+  if (cancelAll || (activeJobs.get(fileId)?.canceled)) return;
   try { mainWindow.webContents.send('phase-event', { fileId, phase: 'detect', status: 'start' }); } catch {}
   if (settings?.autoTrim) {
     const minFileMs = Math.max(0, Number(settings.trimMinFileMs ?? 800));
@@ -589,7 +594,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
         }
       }
       if (!region) {
-        if (!cancelAll) {
+        if (!cancelAll && !(activeJobs.get(fileId)?.canceled)) {
           region = await detectVoiceRegion({ input, durationSec, settings, fileId });
         }
       }
@@ -615,6 +620,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       try { mainWindow.webContents.send('log', { fileId, phase: 'trim', line: `No trimming applied: file shorter than minimum ${minFileMs}ms.` }); } catch {}
     }
   }
+  if (cancelAll || (activeJobs.get(fileId)?.canceled)) return;
   try { mainWindow.webContents.send('phase-event', { fileId, phase: 'detect', status: 'done' }); } catch {}
   // Pass 1: analyze
   const seekArgs = (seekStart > 0 || seekEnd < durationSec)
@@ -623,6 +629,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   let params = null;
   let measuredMaxVolume = null;
   if (normMode === 'lufs' && !fastNormalize) {
+    if (cancelAll || (activeJobs.get(fileId)?.canceled)) return;
     try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'start' }); } catch {}
     const pass1FilterParts = [];
     if (trimFilter) pass1FilterParts.push(trimFilter);
@@ -685,6 +692,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       }
     } catch {}
   } else if (normMode === 'peak') {
+    if (cancelAll || (activeJobs.get(fileId)?.canceled)) return;
     try { mainWindow.webContents.send('phase-event', { fileId, phase: 'analyze', status: 'start' }); } catch {}
     const pass1FilterParts = [];
     if (trimFilter) pass1FilterParts.push(trimFilter);
@@ -744,6 +752,7 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   }
 
   // Pass 2: apply normalization + limiter and force 16-bit PCM
+  if (cancelAll || (activeJobs.get(fileId)?.canceled)) return;
   try { mainWindow.webContents.send('phase-event', { fileId, phase: 'render', status: 'start' }); } catch {}
   const filterParts = [];
   if (trimFilter) filterParts.push(trimFilter);
@@ -1030,6 +1039,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
         },
       });
 
+      if (cancelAll || (activeJobs.get(item.id)?.canceled)) return;
       completed += 1;
       perFileProgress.set(item.id, dur);
       notifyProgress(item.id);
@@ -1058,7 +1068,7 @@ ipcMain.handle('cancel-processing', () => {
   for (const [, job] of activeJobs) {
     job.canceled = true;
     for (const p of job.procs) {
-      try { p.kill('SIGKILL'); } catch {}
+      try { killProcessTree(p); } catch {}
     }
   }
   return true;
