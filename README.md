@@ -44,16 +44,64 @@ This launches the Electron app in development mode.
 
 ## Build distributables
 
+Builds use electron‑builder and include FFmpeg/FFprobe (unpacked from ASAR for runtime execution).
+
+Basic:
+
 ```bash
 npm run dist
 ```
 
-This packages the app using electron‑builder into:
+Platform‑specific:
 
-- macOS: DMG
-- Windows: Portable
+```bash
+# macOS universal DMG (runs on Apple Silicon + Intel)
+npm run dist -- --mac
 
-The build includes FFmpeg/FFprobe and unpacks them from ASAR so they are executable at runtime.
+# Windows portable (from macOS requires Wine; from Windows needs no Wine)
+npm run dist -- --win
+```
+
+Outputs are written to `dist/`, e.g.:
+
+- `dist/Bulk Audio Normalizer-<version>-universal.dmg`
+- `dist/Bulk Audio Normalizer <version>.exe`
+
+Notes:
+
+- Unsigned builds: these are not code‑signed. On macOS, you may need to right‑click → Open the first time and approve running from an unidentified developer.
+- Windows ffmpeg correctness: The `ffmpeg-static` install must run on the target platform to fetch a native binary. If cross-building, provide a real Windows PE executable via env `FFMPEG_WIN64` (path to ffmpeg.exe) or rely on CI Windows runner.
+- Cross‑building Windows on macOS: Recommended to use CI (GitHub Actions `windows-latest`). Local cross-builds will not produce a valid Windows ffmpeg unless the above env override is used.
+
+### Advanced: Windows ffmpeg bundling via repo zip
+
+For cross‑building Windows from macOS without making network requests, this repo assumes there's a pre‑downloaded Windows `ffmpeg-static` package as a zip at `build/win32-resources/ffmpeg-static.zip`. Since GitHub limits file sizes to 25mb, that is .gitignore-d on our online version of the repository, and so you would need to run npm install ffmpeg-static@5.2.0 (or higher) on a windows machine to get that binary, then zip the ffmpeg-static node_modules folder and put it in build/win32-resources in your offline copy of this repository.
+
+- Our packaging hook (`scripts/afterPack.cjs`) extracts `ffmpeg.exe` from that zip and places it at:
+	`app.asar.unpacked/node_modules/ffmpeg-static/bin/win32/x64/ffmpeg.exe`
+- This path matches what the app resolves at runtime, alongside `ffprobe-static`.
+- If the zip is missing or extraction fails, the hook falls back to any existing PE `ffmpeg*` file in `node_modules/ffmpeg-static/` (rare during cross‑builds).
+
+Updating the zip:
+
+- Replace `build/win32-resources/ffmpeg-static.zip` with a zip that contains a valid Windows PE `ffmpeg.exe` (for example, by installing `ffmpeg-static` on a Windows machine and zipping its folder that contains `ffmpeg.exe`).
+- No version pin is enforced by the hook; use a version compatible with the app’s FFmpeg CLI flags (FFmpeg ≥ 5.x is fine; 6.x recommended).
+
+Behavior on macOS vs Windows:
+
+- macOS builds do NOT use this zip and will not overwrite the macOS ffmpeg binary; the mac path is normalized under `bin/darwin/universal/ffmpeg`.
+- Windows builds use the zip on macOS cross‑builds. On a native Windows machine, you may prefer to disable the zip step and let `ffmpeg-static` provide `ffmpeg.exe` directly.
+
+### Known issues (Windows dev machines)
+
+- These build scripts and the packaging hook are designed and tested primarily on macOS, including cross‑building the Windows portable.
+- Running the packaging hook as‑is on Windows may require adjustments (e.g., using `Expand-Archive` or 7‑Zip with correct paths). The current hook attempts PowerShell `Expand-Archive` when available, and `unzip` on Unix‑like hosts.
+- If you’re developing on Windows, consider one of the following:
+	- Remove/skip the zip extraction path and rely on `ffmpeg-static` to provide `ffmpeg.exe` natively on Windows.
+	- Or change the extraction command to use a tool you have installed (e.g., 7‑Zip) and keep the `build/win32-resources/ffmpeg-static.zip` flow.
+	- Or build Windows artifacts in CI on `windows-latest`, which avoids cross‑build quirks entirely.
+ 
+In short: macOS can cross‑build both platforms with this repo’s zip‑based approach; Windows developers may need to adapt `scripts/afterPack.cjs` to their environment before `npm run dist -- --win` works locally.
 
 ## Icons
 

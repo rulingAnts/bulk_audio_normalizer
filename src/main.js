@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, Menu } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 // App state
 let mainWindow;
 let previewWindow;
+let stoppedNotified = false;
 let activeJobs = new Map(); // key: fileId -> { procs: [ChildProcess], canceled: boolean }
 let cancelAll = false; // batch-level cancel flag for immediate stop
 // CPU sampling state for Windows-friendly throttling
@@ -70,6 +71,31 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // Keep DevTools available via the menu, but do not auto-open on launch
+  try {
+    const template = [
+      ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+      { role: 'fileMenu' },
+      { role: 'viewMenu' }, // includes Toggle Developer Tools and Reload
+    ];
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  } catch {}
+
+  // After the renderer loads, send debug info with resolved ffmpeg/ffprobe paths
+  mainWindow.webContents.once('did-finish-load', () => {
+    try {
+      const ffmpegPath = resolveBinaryPath(ffmpegStatic);
+      const ffprobePath = resolveBinaryPath(ffprobeStatic?.path || ffprobeStatic);
+      mainWindow.webContents.send('debug-info', {
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appDir: __dirname,
+        ffmpegPath,
+        ffprobePath,
+      });
+    } catch {}
+  });
 }
 
 app.whenReady().then(() => {
@@ -81,7 +107,42 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Quit the app on all platforms when all windows are closed (including macOS)
+  app.quit();
+});
+
+// Ensure all child processes are terminated when the app is quitting
+function forceStopAll() {
+  cancelAll = true;
+  try {
+    for (const [, job] of activeJobs) {
+      job.canceled = true;
+      for (const p of job.procs) {
+        try { killProcessTree(p); } catch {}
+      }
+    }
+  } catch {}
+}
+
+app.on('before-quit', () => {
+  forceStopAll();
+});
+app.on('will-quit', () => {
+  forceStopAll();
+});
+app.on('quit', () => {
+  forceStopAll();
+});
+process.on('exit', () => {
+  forceStopAll();
+});
+process.on('SIGINT', () => {
+  forceStopAll();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  forceStopAll();
+  process.exit(0);
 });
 
 function createPreviewWindow() {
@@ -168,6 +229,50 @@ function run(cmd, args, options = {}) {
   return child;
 }
 
+// Ensure native binaries resolve to the unpacked path when packaged with ASAR
+function resolveBinaryPath(originalPath, kind = 'ffmpeg') {
+  if (!originalPath || typeof originalPath !== 'string') return originalPath;
+  let p = originalPath.replace(/app\.asar(?!\.unpacked)/g, 'app.asar.unpacked');
+
+  // Normalize to structured bin layout if present (afterPack creates these)
+  const baseDir = path.dirname(p); // ffmpeg-static or ffprobe-static subfolder
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
+  const structuredWin = path.join(baseDir, 'bin', 'win32', 'x64', kind === 'ffprobe' ? 'ffprobe.exe' : 'ffmpeg.exe');
+  const structuredMac = path.join(baseDir, 'bin', 'darwin', 'universal', kind === 'ffprobe' ? 'ffprobe' : 'ffmpeg');
+
+  try {
+    if (isWin && fs.existsSync(structuredWin)) return structuredWin;
+    if (isMac && fs.existsSync(structuredMac)) return structuredMac;
+  } catch {}
+
+  // Windows fallback: if missing and no .exe, try with .exe
+  if (isWin && !fs.existsSync(p) && !/\.exe$/i.test(p) && fs.existsSync(p + '.exe')) {
+    p = p + '.exe';
+  }
+  return p;
+}
+
+function getResolvedBinaryPaths() {
+  const ffmpegRaw = ffmpegStatic; // module exports path string
+  const ffprobeRaw = ffprobeStatic?.path || ffprobeStatic; // ffprobe-static exports object with .path
+  const ffmpegPath = resolveBinaryPath(ffmpegRaw, 'ffmpeg');
+  const ffprobePath = resolveBinaryPath(ffprobeRaw, 'ffprobe');
+  const ffmpegExists = !!(ffmpegPath && fs.existsSync(ffmpegPath));
+  const ffprobeExists = !!(ffprobePath && fs.existsSync(ffprobePath));
+  return { ffmpegPath, ffprobePath, ffmpegExists, ffprobeExists };
+}
+
+function isWindowsPE(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.allocUnsafe(2);
+    const n = fs.readSync(fd, buf, 0, 2, 0);
+    fs.closeSync(fd);
+    return n === 2 && buf[0] === 0x4D && buf[1] === 0x5A; // 'MZ'
+  } catch { return false; }
+}
 function killProcessTree(child) {
   if (!child || !child.pid) return;
   try {
@@ -246,7 +351,8 @@ function getDurationSeconds(filePath, fileId = null) {
 
   // Fallback to ffprobe for non-WAV or edge cases
   return new Promise((resolve) => {
-    const proc = run(ffprobeStatic.path, [
+    const ffprobePath = resolveBinaryPath(ffprobeStatic?.path || ffprobeStatic);
+    const proc = run(ffprobePath, [
       '-v', 'error',
       '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1',
@@ -494,7 +600,8 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
       '-af', filters.join(','),
       '-f', 'null', '-'
     ];
-  const p = run(ffmpegStatic, args);
+  const ffmpegPath = resolveBinaryPath(ffmpegStatic);
+  const p = run(ffmpegPath, args);
     const job = activeJobs.get(fileId);
     if (job) job.procs.push(p);
     let closed = false;
@@ -646,7 +753,8 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
 
     let analysisJson = '';
     await new Promise((resolve, reject) => {
-      const p1 = run(ffmpegStatic, pass1Args);
+  const ffmpegPath = resolveBinaryPath(ffmpegStatic);
+  const p1 = run(ffmpegPath, pass1Args);
 
       const job = activeJobs.get(fileId);
       if (job) job.procs.push(p1);
@@ -709,7 +817,8 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
     ];
 
     await new Promise((resolve, reject) => {
-      const p1 = run(ffmpegStatic, pass1Args);
+  const ffmpegPath = resolveBinaryPath(ffmpegStatic);
+  const p1 = run(ffmpegPath, pass1Args);
 
       const job = activeJobs.get(fileId);
       if (job) job.procs.push(p1);
@@ -794,7 +903,8 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
   ];
 
   await new Promise((resolve, reject) => {
-    const p2 = run(ffmpegStatic, pass2Args);
+  const ffmpegPath2 = resolveBinaryPath(ffmpegStatic);
+  const p2 = run(ffmpegPath2, pass2Args);
 
     const job = activeJobs.get(fileId);
     if (job) job.procs.push(p2);
@@ -914,6 +1024,14 @@ ipcMain.handle('clear-output-folder', async (evt, outDir) => {
 });
 
 ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, concurrency = Math.max(1, Math.min(os.cpus().length - 1, 4)) }) => {
+  // Validate ffmpeg/ffprobe availability before heavy work
+  const { ffmpegExists, ffprobeExists, ffmpegPath, ffprobePath } = getResolvedBinaryPaths();
+  if (!ffmpegExists || !ffprobeExists) {
+    const msg = `Required binaries not found in packaged app. ffmpeg=${ffmpegExists ? 'OK' : ffmpegPath || 'missing'}; ffprobe=${ffprobeExists ? 'OK' : ffprobePath || 'missing'}. On Windows, build on a Windows runner or CI to bundle Windows binaries.`;
+    try { mainWindow.webContents.send('log', { fileId: 'batch', phase: 'error', line: msg }); } catch {}
+    return { ok: false, error: msg };
+  }
+  stoppedNotified = false;
   cancelAll = false; // reset batch cancel state
   // Discover files
   const files = listWavFilesRecursive(inputDir);
@@ -1057,7 +1175,10 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
     activeJobs.clear();
     try { clearInterval(monitor); } catch {}
     if (cancelAll) {
-      try { mainWindow.webContents.send('stopped', { reason: 'canceled' }); } catch {}
+      if (!stoppedNotified) {
+        try { mainWindow.webContents.send('stopped', { reason: 'canceled' }); } catch {}
+        stoppedNotified = true;
+      }
       cancelAll = false;
     }
   }
@@ -1071,6 +1192,11 @@ ipcMain.handle('cancel-processing', () => {
       try { killProcessTree(p); } catch {}
     }
   }
+  // Notify immediately so UI can update without waiting for cleanup paths
+  if (!stoppedNotified) {
+    try { mainWindow.webContents.send('stopped', { reason: 'canceled' }); } catch {}
+    stoppedNotified = true;
+  }
   return true;
 });
 
@@ -1079,6 +1205,12 @@ ipcMain.handle('reveal-path', (evt, filePath) => {
 });
 
 ipcMain.handle('start-preview', async (evt, { inputDir, sampleSize = 5, settings, concurrency = 2 }) => {
+  const { ffmpegExists, ffprobeExists, ffmpegPath, ffprobePath } = getResolvedBinaryPaths();
+  if (!ffmpegExists || !ffprobeExists) {
+    const msg = `Required binaries not found in packaged app. ffmpeg=${ffmpegExists ? 'OK' : ffmpegPath || 'missing'}; ffprobe=${ffprobeExists ? 'OK' : ffprobePath || 'missing'}. On Windows, build on a Windows runner or CI to bundle Windows binaries.`;
+    try { mainWindow.webContents.send('log', { fileId: 'preview', phase: 'error', line: msg }); } catch {}
+    return { ok: false, error: msg };
+  }
   const allFiles = listWavFilesRecursive(inputDir);
   if (allFiles.length === 0) {
     return { ok: false, error: 'No WAV files found for preview.' };

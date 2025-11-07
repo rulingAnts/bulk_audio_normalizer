@@ -24,4 +24,5 @@ contextBridge.exposeInMainWorld('api', {
   onPreviewDone: (cb) => ipcRenderer.on('preview-done', (_e, data) => cb(data)),
   onThrottleEvent: (cb) => ipcRenderer.on('throttle-event', (_e, data) => cb(data)),
   onStopped: (cb) => ipcRenderer.on('stopped', (_e, data) => cb(data)),
+  onDebugInfo: (cb) => ipcRenderer.on('debug-info', (_e, data) => cb(data)),
 });

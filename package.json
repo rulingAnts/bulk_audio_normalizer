@@ -27,12 +27,12 @@
       "**/node_modules/ffmpeg-static/**",
       "**/node_modules/ffprobe-static/**"
     ],
+    "afterPack": "scripts/afterPack.cjs",
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        { "target": "dmg", "arch": ["universal"] }
       ],
-      "icon": "build/icons/icon.icns",
-      "universalApp": true
+      "icon": "build/icons/icon.icns"
     },
     "win": {
       "target": [

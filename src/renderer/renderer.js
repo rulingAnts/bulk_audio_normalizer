@@ -6,9 +6,9 @@ const outputPath = $('#outputPath');
 const btnInput = $('#btnInput');
 const btnOutput = $('#btnOutput');
 const btnStart = $('#btnStart');
-const btnCancel = $('#btnCancel');
+// Stop button removed; keep references optional for backward compatibility
 const btnClearOutput = $('#btnClearOutput');
-const stopStatus = $('#stopStatus');
+const stopStatus = document.querySelector('#stopStatus');
 const outputValidation = $('#outputValidation');
 // Notice elements
 const noticeMin = $('#noticeMin');
@@ -47,6 +47,31 @@ function toFileUrl(p) {
   if (/^[A-Za-z]:\//.test(pathStr)) pathStr = '/' + pathStr;
   return 'file://' + encodeURI(pathStr);
 }
+
+// Debug: print binary paths and packaging info into DevTools console
+window.api.onDebugInfo?.((info) => {
+  try {
+    // Visible in DevTools Console
+    console.group('[DebugInfo]');
+    console.log('isPackaged:', info?.isPackaged);
+    console.log('resourcesPath:', info?.resourcesPath);
+    console.log('appDir (__dirname):', info?.appDir);
+    console.log('ffmpegPath:', info?.ffmpegPath);
+    console.log('ffprobePath:', info?.ffprobePath);
+    console.groupEnd();
+    // Also echo to the in-app log for convenience
+    if (logView) {
+      const lines = [
+        `isPackaged=${info?.isPackaged}`,
+        `resourcesPath=${info?.resourcesPath}`,
+        `appDir=${info?.appDir}`,
+        `ffmpegPath=${info?.ffmpegPath}`,
+        `ffprobePath=${info?.ffprobePath}`,
+      ];
+      for (const ln of lines) logView.textContent += `[debug] main: ${ln}\n`;
+    }
+  } catch {}
+});
 
 // Settings inputs
 const inLufs = $('#lufsTarget');
@@ -263,7 +288,7 @@ function setRunning(state) {
   running = state;
   const disableAll = running || stopping;
   btnStart.disabled = disableAll || !inputDir || !outputDir;
-  btnCancel.disabled = !running;
+  // Stop button removed
   btnInput.disabled = disableAll;
   btnOutput.disabled = disableAll;
   btnClearOutput.disabled = disableAll || !outputDir;
@@ -402,12 +427,12 @@ btnClearOutput.addEventListener('click', async () => {
   if (res) {
     outputValidation.textContent = 'Output folder is empty ✓';
     outputValidation.style.color = '#2ea043';
-    // Clearing output resets session and UI
-    resetSessionAndUI();
+    // Only clear files on disk; do not reset UI state
   } else {
     outputValidation.textContent = 'Could not clear output folder.';
     outputValidation.style.color = '#d1242f';
   }
+  // After clearing, allow Start if input/output are set and not running
   btnStart.disabled = (running || stopping) || !inputDir || !outputDir;
 });
 
@@ -442,13 +467,7 @@ btnStart.addEventListener('click', async () => {
   }
 });
 
-btnCancel.addEventListener('click', () => {
-  // Show stopping state immediately; actual "stopped" will be signaled from main
-  stopping = true;
-  if (stopStatus) stopStatus.textContent = 'Stopping…';
-  setRunning(true); // disables controls while stopping
-  try { window.api.cancelProcessing(); } catch {}
-});
+// Stop button removed: stopping via app close only
 
 function ensureFileItem(id, name) {
   if (fileItems.has(id)) return fileItems.get(id);
@@ -540,6 +559,18 @@ window.api.onAllDone(() => {
   setRunning(false);
   batchStatus.textContent = 'Completed';
   throttleInfo = '';
+  // After a successful run, the output folder is not empty.
+  // Keep Start disabled until the user clears the output (no resume allowed).
+  (async () => {
+    if (outputDir) {
+      const empty = await window.api.validateOutputEmpty(outputDir);
+      outputValidation.textContent = empty ? 'Output folder is empty ✓' : 'Output folder must be empty.';
+      outputValidation.style.color = empty ? '#2ea043' : '#d1242f';
+      btnStart.disabled = !empty || !inputDir || !outputDir;
+    } else {
+      btnStart.disabled = !inputDir || !outputDir;
+    }
+  })();
 });
 
 window.api.onStopped(() => {
