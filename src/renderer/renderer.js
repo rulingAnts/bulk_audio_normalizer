@@ -8,6 +8,7 @@ const btnOutput = $('#btnOutput');
 const btnStart = $('#btnStart');
 const btnCancel = $('#btnCancel');
 const btnClearOutput = $('#btnClearOutput');
+const stopStatus = $('#stopStatus');
 const outputValidation = $('#outputValidation');
 // Notice elements
 const noticeMin = $('#noticeMin');
@@ -388,6 +389,7 @@ btnStart.addEventListener('click', async () => {
   // Reset batch status
   phaseActive.detect = phaseActive.analyze = phaseActive.render = 0;
   batchStatus.textContent = 'Preparing…';
+  if (stopStatus) stopStatus.textContent = '';
 
   setRunning(true);
   const s = currentSettings();
@@ -401,7 +403,7 @@ btnStart.addEventListener('click', async () => {
 btnCancel.addEventListener('click', () => {
   // Show stopping state immediately; actual "stopped" will be signaled from main
   stopping = true;
-  batchStatus.textContent = 'Stopping…';
+  if (stopStatus) stopStatus.textContent = 'Stopping…';
   setRunning(true); // disables controls while stopping
   try { window.api.cancelProcessing(); } catch {}
 });
@@ -501,6 +503,7 @@ window.api.onStopped(() => {
   stopping = false;
   setRunning(false);
   batchStatus.textContent = 'Stopped';
+  if (stopStatus) stopStatus.textContent = '';
   throttleInfo = '';
 });
 
