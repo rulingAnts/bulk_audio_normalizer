@@ -8,6 +8,20 @@ const btnOutput = $('#btnOutput');
 const btnStart = $('#btnStart');
 const btnCancel = $('#btnCancel');
 const outputValidation = $('#outputValidation');
+// Notice elements
+const noticeMin = $('#noticeMin');
+const noticeBrief = $('#noticeBrief');
+const noticeFull = $('#noticeFull');
+// Notice controls (top-right +/- only)
+const btnNoticePlusMin = $('#btnNoticePlusMin');
+const btnNoticePlusBrief = $('#btnNoticePlusBrief');
+const btnNoticeMinusBrief = $('#btnNoticeMinusBrief');
+const btnNoticeMinusFull = $('#btnNoticeMinusFull');
+const btnNoticeCollapseMin2 = $('#btnNoticeCollapseMin2');
+const profileSelect = $('#profileSelect');
+const profileDesc = $('#profileDesc');
+const bitDepthSelect = $('#bitDepth');
+const normModeSelect = $('#normMode');
 const overallBar = $('#overallBar');
 const overallPct = $('#overallPct');
 const overallCount = $('#overallCount');
@@ -23,6 +37,7 @@ const previewInfo = $('#previewInfo');
 
 // Settings inputs
 const inLufs = $('#lufsTarget');
+const inPeakTarget = $('#peakTargetDb');
 const inTP = $('#tpMargin');
 const inLimiter = $('#limiterLimit');
 const inConc = $('#concurrency');
@@ -34,6 +49,9 @@ const inTrimMinFileMs = $('#trimMinFileMs');
 const chkTrimConservative = $('#trimConservative');
 const chkTrimHPF = $('#trimHPF');
 const chkVerbose = $('#verboseLogs');
+const chkFastNormalize = $('#fastNormalize');
+const inFfmpegThreads = $('#ffmpegThreads');
+const chkFastTrim = $('#fastTrim');
 
 let inputDir = '';
 let outputDir = '';
@@ -47,19 +65,16 @@ fileList.addEventListener('scroll', () => {
   autoScrollFiles = nearBottom;
 });
 const phaseActive = { detect: 0, analyze: 0, render: 0 };
+let throttleInfo = '';
 
 function updateBatchStatus() {
-  if (phaseActive.render > 0) {
-    batchStatus.textContent = 'Rendering…';
-  } else if (phaseActive.analyze > 0) {
-    batchStatus.textContent = 'Analyzing…';
-  } else if (phaseActive.detect > 0) {
-    batchStatus.textContent = 'Detecting…';
-  } else if (running) {
-    batchStatus.textContent = 'Queued…';
-  } else {
-    // idle
-  }
+  let msg = '';
+  if (phaseActive.render > 0) msg = 'Rendering…';
+  else if (phaseActive.analyze > 0) msg = 'Analyzing…';
+  else if (phaseActive.detect > 0) msg = 'Detecting…';
+  else if (running) msg = 'Queued…';
+  if (throttleInfo) msg = msg ? `${msg} • ${throttleInfo}` : throttleInfo;
+  if (msg) batchStatus.textContent = msg;
 }
 
 const SETTINGS_KEY = 'ban_settings_v1';
@@ -67,7 +82,13 @@ const SETTINGS_KEY = 'ban_settings_v1';
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return;
+    if (!raw) {
+      // No saved settings: set smart defaults
+      const cores = navigator.hardwareConcurrency || 4;
+      inConc.value = Math.max(1, cores - 1);
+      if (normModeSelect) normModeSelect.value = 'peak';
+      return;
+    }
     const s = JSON.parse(raw);
     if (s.lufsTarget != null) inLufs.value = s.lufsTarget;
     if (s.tpMargin != null) inTP.value = s.tpMargin;
@@ -81,6 +102,20 @@ function loadSettings() {
     if (typeof s.trimConservative === 'boolean') chkTrimConservative.checked = s.trimConservative;
     if (typeof s.trimHPF === 'boolean') chkTrimHPF.checked = s.trimHPF;
     if (typeof s.verboseLogs === 'boolean') chkVerbose.checked = s.verboseLogs;
+    if (typeof s.fastNormalize === 'boolean') chkFastNormalize.checked = s.fastNormalize;
+    if (s.ffmpegThreads != null) inFfmpegThreads.value = String(s.ffmpegThreads);
+    if (typeof s.fastTrim === 'boolean') chkFastTrim.checked = s.fastTrim; else chkFastTrim.checked = true;
+    if (s.targetBitDepth != null) bitDepthSelect.value = String(s.targetBitDepth);
+    if (s.normMode) normModeSelect.value = s.normMode;
+    if (s.peakTargetDb != null) inPeakTarget.value = String(s.peakTargetDb);
+  } catch {}
+  // If settings exist but concurrency not set, set smart default
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    if (saved && saved.concurrency == null) {
+      const cores = navigator.hardwareConcurrency || 4;
+      inConc.value = Math.max(1, cores - 1);
+    }
   } catch {}
 }
 
@@ -92,6 +127,7 @@ function saveSettings() {
 function currentSettings() {
   return {
     lufsTarget: Number(inLufs.value),
+    peakTargetDb: Number(inPeakTarget.value),
     tpMargin: Number(inTP.value),
     limiterLimit: Number(inLimiter.value),
     concurrency: Math.max(1, Number(inConc.value || 1)),
@@ -104,7 +140,75 @@ function currentSettings() {
     trimConservative: !!chkTrimConservative.checked,
     trimHPF: !!chkTrimHPF.checked,
     verboseLogs: !!chkVerbose.checked,
+    fastNormalize: !!chkFastNormalize.checked,
+    ffmpegThreads: Math.max(0, Number(inFfmpegThreads.value || 0)) || 0,
+    fastTrim: !!chkFastTrim.checked,
+    targetBitDepth: (() => {
+      const v = (bitDepthSelect?.value || '16');
+      if (v === 'original') return 'original';
+      const n = Number(v);
+      if (Number.isFinite(n)) return Math.max(16, Math.min(24, n));
+      return 16;
+    })(),
+    normMode: ((normModeSelect && normModeSelect.value) === 'lufs') ? 'lufs' : 'peak',
   };
+}
+
+function recommendedConcurrency() {
+  const cores = navigator.hardwareConcurrency || 4;
+  return Math.max(1, cores - 1);
+}
+
+function applyPreset(name) {
+  const recConc = recommendedConcurrency();
+  let desc = '';
+  if (name === 'fast') {
+    // Fastest processing
+    chkAutoTrim.checked = false; // absolute fastest; user can switch to Balanced for trimming
+    chkFastTrim.checked = true;
+    chkFastNormalize.checked = true;
+    inTrimThresholdDb.value = '-35';
+    inTrimPadMs.value = '400';
+    inConc.value = recConc;
+    inFfmpegThreads.value = '1';
+    desc = 'Fastest: focus on speed. Trimming off; single-pass normalize; many files at once.';
+  } else if (name === 'balanced') {
+    chkAutoTrim.checked = true;
+    chkFastTrim.checked = true;
+    chkFastNormalize.checked = false;
+    inTrimThresholdDb.value = '-45';
+    inTrimPadMs.value = '800';
+    inConc.value = recConc;
+    inFfmpegThreads.value = '1';
+    desc = 'Balanced: good speed and safe defaults. Fast trim on; precise 2-pass normalize.';
+  } else if (name === 'quality') {
+    chkAutoTrim.checked = true;
+    chkFastTrim.checked = false; // use FFmpeg detect
+    chkTrimHPF.checked = true;
+    chkTrimConservative.checked = true;
+    chkFastNormalize.checked = false;
+    inTrimThresholdDb.value = '-50';
+    inTrimPadMs.value = '800';
+    inConc.value = String(Math.max(1, Math.floor(recommendedConcurrency() / 2)));
+    inFfmpegThreads.value = '0'; // auto
+    desc = 'Highest quality/safety: most cautious trimming and full accuracy; CPU/RAM heavy. Adaptive throttling will protect your system.';
+  } else {
+    desc = 'Custom: your own combination. Open Advanced… to tweak.';
+  }
+  profileDesc.textContent = desc;
+  saveSettings();
+}
+
+function describePresetForCurrent() {
+  const s = currentSettings();
+  const recConc = recommendedConcurrency();
+  const isFast = !s.autoTrim && s.fastTrim && s.fastNormalize && Number(s.concurrency) === recConc && Number(s.ffmpegThreads) === 1;
+  const isBalanced = s.autoTrim && s.fastTrim && !s.fastNormalize && Number(s.concurrency) === recConc && Number(s.ffmpegThreads) === 1;
+  const isQuality = s.autoTrim && !s.fastTrim && s.trimHPF && s.trimConservative && !s.fastNormalize && Number(s.concurrency) === Math.max(1, Math.floor(recConc / 2)) && Number(s.ffmpegThreads) === 0;
+  if (isFast) return 'fast';
+  if (isBalanced) return 'balanced';
+  if (isQuality) return 'quality';
+  return 'custom';
 }
 
 function setRunning(state) {
@@ -117,8 +221,51 @@ function setRunning(state) {
 }
 
 // Persist settings on change
-;[inLufs, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose].forEach((el) => el.addEventListener('change', saveSettings));
+[inLufs, inPeakTarget, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim, bitDepthSelect, normModeSelect].forEach((el) => el.addEventListener('change', () => {
+  saveSettings();
+  const p = describePresetForCurrent();
+  profileSelect.value = p;
+  if (p === 'fast') profileDesc.textContent = 'Fastest: focus on speed. Trimming off; single-pass normalize; many files at once.';
+  else if (p === 'balanced') profileDesc.textContent = 'Balanced: good speed and safe defaults. Fast trim on; precise 2-pass normalize.';
+  else if (p === 'quality') profileDesc.textContent = 'Highest quality/safety: most cautious trimming and full accuracy; slightly slower.';
+  else profileDesc.textContent = 'Custom: your own combination. Open Advanced… to tweak.';
+}));
 loadSettings();
+
+// Notice behavior (three levels: min <-> brief <-> full)
+const NOTICE_STATE_KEY = 'ban_notice_state'; // 'min' | 'brief' | 'full'
+function setNoticeState(state) {
+  localStorage.setItem(NOTICE_STATE_KEY, state);
+  if (state === 'min') {
+    noticeMin.classList.remove('hidden');
+    noticeBrief.classList.add('hidden');
+    noticeFull.classList.add('hidden');
+  } else if (state === 'brief') {
+    noticeMin.classList.add('hidden');
+    noticeBrief.classList.remove('hidden');
+    noticeFull.classList.add('hidden');
+  } else if (state === 'full') {
+    noticeMin.classList.add('hidden');
+    noticeBrief.classList.add('hidden');
+    noticeFull.classList.remove('hidden');
+  }
+}
+
+btnNoticePlusMin?.addEventListener('click', () => setNoticeState('brief'));
+btnNoticePlusBrief?.addEventListener('click', () => setNoticeState('full'));
+btnNoticeMinusBrief?.addEventListener('click', () => setNoticeState('min'));
+btnNoticeMinusFull?.addEventListener('click', () => setNoticeState('brief'));
+btnNoticeCollapseMin2?.addEventListener('click', () => setNoticeState('min'));
+
+// Initialize notice state (default brief)
+setNoticeState(localStorage.getItem(NOTICE_STATE_KEY) || 'brief');
+
+// Initialize preset selector based on current settings
+profileSelect.value = describePresetForCurrent();
+if (profileSelect.value === 'custom') profileDesc.textContent = 'Custom: your own combination. Open Advanced… to tweak.';
+profileSelect.addEventListener('change', () => {
+  applyPreset(profileSelect.value);
+});
 
 btnInput.addEventListener('click', async () => {
   const dir = await window.api.selectInputFolder(inputDir);
@@ -185,9 +332,7 @@ function ensureFileItem(id, name) {
   el.innerHTML = `
     <div class="top">
       <div class="name" title="${name}">${name}</div>
-      <div class="pct" data-role="pct">0%</div>
     </div>
-    <div class="progress"><div class="bar" data-role="bar" style="width:0%"></div></div>
     <div class="phase-bars">
       <div class="phase">
         <span class="label">Detect</span>
@@ -215,12 +360,22 @@ window.api.onFileStart(({ fileId, name }) => {
   ensureFileItem(fileId, name);
 });
 
+let batchStartTs = 0;
 window.api.onBatchStart(({ total }) => {
   if (Number.isFinite(total)) {
     overallCount.textContent = `0/${total}`;
   }
+  batchStartTs = Date.now();
   if (running) batchStatus.textContent = 'Queued…';
 });
+
+function fmtHMS(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const hh = Math.floor(s / 3600).toString().padStart(2, '0');
+  const mm = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+  const ss = Math.floor(s % 60).toString().padStart(2, '0');
+  return (hh !== '00' ? hh + ':' : '') + mm + ':' + ss;
+}
 
 window.api.onProgress(({ fileId, filePct, overallPct: oPct, completed, total }) => {
   overallBar.style.width = `${oPct.toFixed(1)}%`;
@@ -228,24 +383,25 @@ window.api.onProgress(({ fileId, filePct, overallPct: oPct, completed, total }) 
   if (Number.isFinite(completed) && Number.isFinite(total)) {
     overallCount.textContent = `${completed}/${total}`;
   }
+  // Time estimates
+  if (batchStartTs) {
+    const elapsed = Date.now() - batchStartTs;
+    const pct = Math.max(0.1, Math.min(99.9, oPct));
+    const eta = elapsed * (100 / pct - 1);
+    const overallTime = document.querySelector('#overallTime');
+    if (overallTime) overallTime.textContent = `Elapsed ${fmtHMS(elapsed)} • ETA ${fmtHMS(eta)}`;
+  }
 
   // Lazily create item on first progress signal if needed
   let itemEl = fileItems.get(fileId);
   if (!itemEl) itemEl = ensureFileItem(fileId, `File ${fileId}`);
-  const pctEl = itemEl.querySelector('[data-role="pct"]');
-  const barEl = itemEl.querySelector('[data-role="bar"]');
-  pctEl.textContent = `${filePct.toFixed(1)}%`;
-  barEl.style.width = `${filePct.toFixed(1)}%`;
+  // No per-file overall bar; only phase bars are shown now
 });
 
 window.api.onFileDone(({ fileId }) => {
   const itemEl = fileItems.get(fileId);
   if (itemEl) {
     itemEl.classList.add('done');
-    const pctEl = itemEl.querySelector('[data-role="pct"]');
-    const barEl = itemEl.querySelector('[data-role="bar"]');
-    pctEl.textContent = '100%';
-    barEl.style.width = '100%';
     // Mark all phases complete if not already
     ['phase-detect','phase-analyze','phase-render'].forEach((role) => {
       const b = itemEl.querySelector(`[data-role="${role}"]`);
@@ -257,6 +413,7 @@ window.api.onFileDone(({ fileId }) => {
 window.api.onAllDone(() => {
   setRunning(false);
   batchStatus.textContent = 'Completed';
+  throttleInfo = '';
 });
 
 window.api.onError(({ message }) => {
@@ -299,22 +456,34 @@ btnClearLog.addEventListener('click', () => {
   logView.textContent = '';
 });
 
+// Adaptive throttling updates
+window.api.onThrottleEvent?.(({ allowed, base, loadPct, freeMemPct, reason }) => {
+  const load = Math.round(loadPct || 0);
+  const mem = Math.round(freeMemPct || 0);
+  if (allowed < base) throttleInfo = `Throttle: ${allowed}/${base} (CPU ${load}%, free ${mem}%)`;
+  else throttleInfo = '';
+  updateBatchStatus();
+});
+
 // Preview handling
 btnPreview.addEventListener('click', async () => {
   if (!inputDir) {
     alert('Select an input folder first.');
     return;
   }
-  previewList.innerHTML = '';
-  previewInfo.textContent = 'Running preview…';
+  // Open a dedicated preview window
+  await window.api.openPreviewWindow();
+  // Keep inline container clean if visible
+  if (typeof previewList !== 'undefined') previewList.innerHTML = '';
+  if (typeof previewInfo !== 'undefined') previewInfo.textContent = 'Running preview…';
   const s = currentSettings();
   const count = Math.max(1, Math.min(50, Number(previewCount.value || 5)));
   const res = await window.api.startPreview({ inputDir, settings: s, sampleSize: count, concurrency: Math.min(2, s.concurrency || 2) });
   if (!res.ok) {
     alert(res.error || 'Preview failed to start');
-    previewInfo.textContent = '';
+    if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
   } else {
-    previewInfo.textContent = `Preview folder: ${res.tmpBase}`;
+    if (typeof previewInfo !== 'undefined') previewInfo.textContent = `Preview folder: ${res.tmpBase}`;
   }
 });
 

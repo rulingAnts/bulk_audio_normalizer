@@ -1,8 +1,8 @@
 {
   "name": "bulk-audio-normalizer",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Electron app to batch convert WAVs to 16-bit and normalize to -16 LUFS with hard limiting.",
+  "description": "Electron app to batch-process WAVs for linguistics: Peak dBFS or LUFS normalization, flexible bit depth, trimming, and responsive batching.",
   "main": "src/main.js",
   "type": "module",
   "scripts": {

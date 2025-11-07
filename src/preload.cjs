@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   validateOutputEmpty: (outDir) => ipcRenderer.invoke('validate-output-empty', outDir),
   startProcessing: (payload) => ipcRenderer.invoke('start-processing', payload),
   startPreview: (payload) => ipcRenderer.invoke('start-preview', payload),
+  openPreviewWindow: () => ipcRenderer.invoke('open-preview-window'),
   cancelProcessing: () => ipcRenderer.invoke('cancel-processing'),
   revealPath: (filePath) => ipcRenderer.invoke('reveal-path', filePath),
 
@@ -20,4 +21,5 @@ contextBridge.exposeInMainWorld('api', {
   onPhaseEvent: (cb) => ipcRenderer.on('phase-event', (_e, data) => cb(data)),
   onPreviewFileDone: (cb) => ipcRenderer.on('preview-file-done', (_e, data) => cb(data)),
   onPreviewDone: (cb) => ipcRenderer.on('preview-done', (_e, data) => cb(data)),
+  onThrottleEvent: (cb) => ipcRenderer.on('throttle-event', (_e, data) => cb(data)),
 });

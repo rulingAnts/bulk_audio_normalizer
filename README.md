@@ -1,15 +1,25 @@
 # Bulk Audio Normalizer
 
-Electron app to batch-convert WAV files to 16‑bit PCM and loudness-normalize to −16 LUFS with a safety limiter to prevent clipping.
+Electron app to batch‑process WAV files for linguistics and fieldwork. Supports two normalization intents — Peak dBFS (default, for acoustic analysis) and LUFS (for consistent listening) — plus flexible bit‑depth output (16‑bit, 24‑bit, or preserve original) with a safety limiter available in LUFS mode. Built for very large batches of short files with responsive UI and careful performance controls.
 
 ## What it does
 
 - Scans an input folder (recursively) for `.wav`/`.wave` files
-- For each file, performs a 2‑pass EBU R128 loudness normalization to −16 LUFS
-- Applies a hard limiter after normalization to guarantee no digital clipping
-- Writes new files to an (empty) output folder, leaving originals unchanged
-- Forces 16‑bit PCM WAV output (`pcm_s16le`)
-- Shows an overall progress bar and per‑file progress with a responsive UI
+- Normalizes audio using one of two intents:
+  - Peak dBFS (Acoustic analysis / Language documentation): analyze peak and apply gain to a target (default −9 dBFS; typical range −12 to −6 dBFS) to preserve headroom for tools like Praat; no limiter is applied in this mode by default.
+  - LUFS (Participatory listening / Human ears): two‑pass EBU R128 `loudnorm` to −16 LUFS with a post‑limiter (default ceiling 0.97) to guarantee no clipping.
+- Output bit depth options:
+  - 16‑bit PCM WAV (`pcm_s16le`)
+  - 24‑bit PCM WAV (`pcm_s24le`) without up‑converting 16‑bit inputs
+  - Original (preserve source format/bit‑depth; e.g., 32‑bit float stays float)
+- Writes to a separate, empty output folder (never in‑place)
+- Optional auto‑trim of leading/trailing silence
+	- Fast trim (edge scan) avoids an extra FFmpeg pass
+	- Or precise FFmpeg‑based detect with optional HPF and conservative mode
+- Responsive UI with:
+	- Overall progress + elapsed time and ETA, plus live throttle status
+	- Per‑file phase bars (Detect / Analyze / Render)
+	- Live log panel (collapsible) and a friendly intro banner
 
 ## Requirements
 
@@ -28,8 +38,8 @@ This launches the Electron app in development mode.
 
 ## Preview mode (random spot check)
 
-- Use the Preview section to process a true random sample of files from your input folder with the current settings.
-- You can play Original vs Preview side by side in-app and reveal files in Finder/Explorer.
+- Use the Preview section to process a true random sample of files from your input folder with the current settings (capped at 50 files per run to keep it responsive).
+- A/B playback with waveforms, seek, select/loop a region, and reveal files in Finder/Explorer.
 - Previews are written to a temporary folder and do not touch your originals.
 
 ## Build distributables
@@ -38,39 +48,109 @@ This launches the Electron app in development mode.
 npm run dist
 ```
 
-This will package the app using electron-builder into platform-specific artifacts (DMG on macOS, NSIS on Windows, AppImage on Linux). The build is configured to include the FFmpeg/FFprobe binaries and unpack them from the ASAR so they are executable at runtime.
+This packages the app using electron‑builder into:
 
-## Notes on loudness and clipping safety
+- macOS: DMG
+- Windows: Portable
 
-- The app uses FFmpeg's `loudnorm` filter (EBU R128) in 2‑pass mode with user-adjustable targets (default `I=-16, TP=-1.0, LRA=11`).
-- After loudness normalization, it applies `alimiter` with adjustable ceiling (default `limit=0.97`, ≈ −0.27 dBFS) as a brick‑wall safety to avoid any inter‑sample or rounding peaks when converting to 16‑bit.
-- Output is encoded as 16‑bit PCM WAV. If your source is higher bit depth or float, it will be dithered/quantized by FFmpeg during conversion.
+The build includes FFmpeg/FFprobe and unpacks them from ASAR so they are executable at runtime.
+
+## Normalization intent: Peak dBFS vs LUFS (guidance)
+
+- Peak dBFS mode is intended for linguistic/acoustic analysis. It boosts quiet files so their highest peak reaches a chosen target (default −9 dBFS; typical −12 to −6 dBFS), without attenuating already‑loud files and without any limiter/compressor. This preserves amplitude relationships and headroom, making files suitable for tools like Praat.
+- LUFS mode targets how loud speech sounds to people. It uses EBU R128 `loudnorm` (two‑pass by default) and then a brick‑wall limiter to ensure zero clipping. This is great for consistent listening and participatory review.
+
+Tip: For language documentation workflows, default to Peak dBFS. For outreach or teaching materials where consistency of perceived loudness matters, use LUFS.
+
+## Notes on loudness and clipping safety (LUFS mode)
+
+- Loudness normalization uses FFmpeg `loudnorm` (EBU R128) with user‑adjustable targets (default `I=-16, TP=-1.0, LRA=11`).
+- After normalization, a brick‑wall safety limiter (`alimiter`) is applied with an adjustable ceiling (default `limit=0.97`, ≈ −0.27 dBFS) to prevent any clipping.
+- Output bit depth is controlled by the Bit depth setting (16/24/Original). When converting from float/high bit depth to 16/24‑bit PCM, FFmpeg handles dithering/quantization.
+
+## Bit depth policy
+
+- 16‑bit: Always write 16‑bit PCM WAV (`pcm_s16le`).
+- 24‑bit: Write 24‑bit PCM WAV (`pcm_s24le`) when the source is >16‑bit; 16‑bit inputs remain 16‑bit (no up‑convert).
+- Original (no limit): Preserve the source format and bit‑depth (e.g., 32‑bit float remains float). This is useful for analysis workflows but results in larger files.
 
 ## Settings
 
-- LUFS target (default −16 LUFS)
-- True-peak target in dBFS (default −1.0 dBFS)
-- Limiter ceiling as linear amplitude 0..1 (default 0.97)
+- Normalization intent: Peak dBFS or LUFS
+  - Peak target (dBFS): default −9; recommended range −12 to −6
+  - LUFS target (I): default −16 LUFS
+  - Limiter ceiling (LUFS mode): linear amplitude 0..1 (default 0.97)
+- Bit depth: 16‑bit, 24‑bit (no 16→24 up‑convert), or Original (preserve)
 - Concurrency (number of files processed in parallel)
-- Auto-trim leading/trailing silence with adjustable parameters:
-	- Keep padding on each side (default 500 ms)
+- Fast normalize (single pass) — skips the loudnorm analysis pass for speed
+- FFmpeg threads per process (optional) — cap per‑process threads when using high concurrency
+- Auto‑trim leading/trailing silence with adjustable parameters:
+	- Keep padding on each side (default 800 ms)
 	- Silence threshold in dBFS (default −50 dB; conservative mode uses −60 dB)
 	- Minimum silence duration (default 200 ms; conservative mode uses 300 ms)
 	- Only trim if file longer than (default 800 ms)
-	- Conservative trim mode (safer for soft voices)
-	- Optional pre-filter rumble (80 Hz high‑pass)
+	- Conservative trim (safer for soft voices)
+	- Pre‑filter rumble (HPF 80 Hz)
+	- Fast trim (edge scan) — trims without running an FFmpeg detect pass (default ON)
 
 Settings are persisted locally per machine.
+
+## Adaptive throttling and performance
+
+- The app monitors CPU load and memory and dynamically reduces concurrency (“throttling”) to keep your computer responsive on heavy settings. Live status is shown near overall progress.
+- Throughput tuning: use higher concurrency with fewer FFmpeg threads per process; or lower concurrency with more threads per process. Preview first, then scale.
+
+## Speed vs. quality: recommended profiles (plain language)
+
+Pick the set of options that fits your situation. You can always preview a random sample first.
+
+- Fastest processing (lots of files, short clips):
+	- Auto‑trim: OFF (or ON if you need it) — if ON, keep Fast trim ON
+	- Fast trim (edge scan): ON
+	- Fast normalize (single pass): ON
+	- Concurrency (how many files at the same time): your computer’s CPU cores minus one
+	- FFmpeg threads per process (power per file): 1–2
+	- Debug/verbose logs: OFF; keep the log panel collapsed
+
+- Balanced (good speed, safe defaults):
+	- Auto‑trim: ON
+	- Fast trim (edge scan): ON
+	- Fast normalize (single pass): OFF (use the more precise 2‑pass)
+	- Concurrency (how many files at once): cores − 1
+	- FFmpeg threads per process: 1–2
+	- Silence threshold: around −40 to −50 dBFS depending on noise level; Keep padding: 800 ms
+
+- Highest caution/quality (safest, slightly slower):
+	- Auto‑trim: ON
+	- Fast trim (edge scan): OFF (use the more careful FFmpeg detect)
+	- Pre‑filter rumble (HPF 80 Hz): ON
+	- Conservative trim: ON (treats softer sounds as “voice” so less gets trimmed)
+	- Fast normalize (single pass): OFF (use full 2‑pass)
+	- Concurrency: moderate (fewer files at once to keep the computer calm)
+	- Limiter ceiling (LUFS mode): 0.97 or lower for extra headroom
+
+Tip: If ends with white noise aren’t trimmed, make the silence threshold a larger number (e.g., −35 dBFS), or turn OFF “Conservative trim.” The Debug log shows what was detected (start/end) and whether trimming was applied.
 
 ## Caveats
 
 - Output folder must be empty before starting (the app enforces this).
-- Hundreds of short files are fine; you can tune concurrency in code (default up to 4 simultaneous jobs based on CPU count).
+- Settings like concurrency and threads interact with your CPU; monitor system responsiveness and adjust.
 
 ## Troubleshooting
 
-- If you see errors, open the DevTools via the Electron app menu and check the console for details.
+- If you see errors, open the Debug log panel for details. You can also open DevTools via the app menu.
+- If trimming doesn’t apply, check the log for “Detect config” and “Trim applied” lines, and adjust threshold/padding.
 - If a file fails to process, the batch will stop and report the error; re‑run after addressing the issue.
+
+## Glossary (simple explanations)
+
+- LUFS: a way to measure how loud speech/music sounds to people. Target is −16 (spoken audio standard in many tools).
+- True‑peak (TP): the highest “in‑between” peak after converting to the final format. LUFS mode aims for −1.0 dBFS TP to be safe.
+- Limiter (LUFS mode): a safety ceiling so loud bits don’t clip (distort). We use 0.97 (just below 0 dB) by default.
+- Auto‑trim: cut silence (or steady noise) at the beginning and end of a clip. You can keep some padding so speech isn’t cut too tight.
+- Silence threshold (dBFS): how quiet is considered “silence.” A larger number (e.g., −35) means more gets treated as silence.
+- Concurrency: how many files are processed at the same time.
+- Threads per process: how much CPU a single file is allowed to use. Fewer threads per file can help when many files run in parallel.
 
 ## License and third‑party notices
 
