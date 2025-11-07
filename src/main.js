@@ -134,7 +134,8 @@ function parseFfmpegTimeToSeconds(t) {
   return parseInt(hh) * 3600 + parseInt(mm) * 60 + parseFloat(ss);
 }
 
-function getDurationSeconds(filePath) {
+function getDurationSeconds(filePath, fileId = null) {
+  if (cancelAll) return Promise.resolve(1);
   // Fast path for WAV: parse header to avoid spawning ffprobe
   try {
     const fd = fs.openSync(filePath, 'r');
@@ -189,6 +190,10 @@ function getDurationSeconds(filePath) {
       '-of', 'default=noprint_wrappers=1:nokey=1',
       filePath,
     ]);
+    if (fileId) {
+      const job = activeJobs.get(fileId);
+      if (job) job.procs.push(proc);
+    }
 
     let buf = '';
     proc.stdout.on('data', (d) => (buf += d.toString()));
@@ -196,6 +201,9 @@ function getDurationSeconds(filePath) {
       const num = parseFloat(buf.trim());
       resolve(Number.isFinite(num) ? num : 0);
     });
+    if (cancelAll) {
+      try { proc.kill('SIGKILL'); } catch {}
+    }
   });
 }
 
@@ -412,6 +420,7 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
     });
   } catch {}
 
+  if (cancelAll) return null;
   return await new Promise((resolve) => {
     // Force info verbosity for silencedetect so it emits silence_start/end lines
     const args = [
@@ -421,6 +430,8 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
       '-f', 'null', '-'
     ];
     const p = run(ffmpegStatic, args);
+    const job = activeJobs.get(fileId);
+    if (job) job.procs.push(p);
     let stderr = '';
     p.stderr.on('data', (data) => {
       const s = data.toString();
@@ -479,6 +490,9 @@ async function detectVoiceRegion({ input, durationSec, settings, fileId }) {
       const end = nonSilent[nonSilent.length - 1][1];
       resolve({ start, end });
     });
+    if (cancelAll) {
+      try { p.kill('SIGKILL'); } catch {}
+    }
   });
 }
 
@@ -510,7 +524,9 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
         }
       }
       if (!region) {
-        region = await detectVoiceRegion({ input, durationSec, settings, fileId });
+        if (!cancelAll) {
+          region = await detectVoiceRegion({ input, durationSec, settings, fileId });
+        }
       }
       if (region) {
   const padSec = Math.max(0, Number(settings.trimPadMs ?? 800) / 1000);
@@ -719,6 +735,9 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
       try { mainWindow.webContents.send('phase-event', { fileId, phase: 'render', status: 'done', pct: 100 }); } catch {}
       resolve();
     });
+    if (cancelAll) {
+      try { p2.kill('SIGKILL'); } catch {}
+    }
   });
 }
 
@@ -822,7 +841,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
   // Pre-fetch durations in parallel (but not too many at once)
   await limitConcurrency(items, Math.min(concurrency, 4), async (item) => {
     if (cancelAll) return; // skip work when canceled
-    const dur = await getDurationSeconds(item.in);
+    const dur = await getDurationSeconds(item.in, item.id);
     perFileDuration.set(item.id, dur > 0 ? dur : 1);
   });
   try { mainWindow.webContents.send('log', { fileId: 'batch', phase: 'info', line: `Got durations for all files. Starting processing with concurrency=${concurrency}.` }); } catch {}
@@ -958,12 +977,14 @@ ipcMain.handle('start-preview', async (evt, { inputDir, sampleSize = 5, settings
   // Pre-fetch durations to inform trimming safety
   const durations = new Map();
   await limitConcurrency(items, concurrency, async (item) => {
-    const dur = await getDurationSeconds(item.in);
+    if (cancelAll) return;
+    const dur = await getDurationSeconds(item.in, item.id);
     durations.set(item.id, dur > 0 ? dur : 1);
   });
 
   try {
     await limitConcurrency(items, concurrency, async (item) => {
+      if (cancelAll) return;
       const dur = durations.get(item.id) || 1;
       await loudnormTwoPassWithLimiter({
         input: item.in,
@@ -974,7 +995,7 @@ ipcMain.handle('start-preview', async (evt, { inputDir, sampleSize = 5, settings
       });
       sendToPreview('preview-file-done', { id: item.id, original: item.in, preview: item.out, rel: item.rel, tmpBase });
     });
-    sendToPreview('preview-done', { count: items.length, tmpBase });
+    if (!cancelAll) sendToPreview('preview-done', { count: items.length, tmpBase });
     return { ok: true, count: items.length, tmpBase };
   } catch (err) {
     sendToPreview('error', { message: `Preview failed: ${err.message}` });
