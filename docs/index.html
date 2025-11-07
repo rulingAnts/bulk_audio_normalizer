@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bulk Audio Normalizer</title>
+  <meta name="description" content="Batch normalize WAV audio for linguistics and fieldwork. Simple app for Peak dBFS or LUFS, optional auto-trim, and safe defaults." />
+  <link rel="preload" href="./styles.css" as="style" />
+  <link rel="stylesheet" href="./styles.css" />
+  <meta property="og:title" content="Bulk Audio Normalizer" />
+  <meta property="og:description" content="Batch normalize WAV audio for linguistics and fieldwork. Peak dBFS or LUFS, optional auto-trim, and safe defaults." />
+  <meta property="og:type" content="website" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1>Bulk Audio Normalizer</h1>
+      <p class="tagline">Fix quiet WAVs and trim long silences — in one go.</p>
+      <div class="cta">
+        <a id="download-mac" class="btn primary disabled" href="#" aria-disabled="true">Download for macOS (DMG)</a>
+        <a id="download-win" class="btn secondary disabled" href="#" aria-disabled="true">Download for Windows (Portable EXE)</a>
+      </div>
+      <p class="small">If the buttons are disabled, visit the <a id="release-page-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/latest">latest releases page</a>.</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="container grid two">
+      <div>
+        <h2>Who this is for</h2>
+        <p>Undergraduate and graduate linguistics students and fieldworkers with lots of audio clips. If your recordings are too quiet, or there’s too much silence at the beginning/end, this app helps you clean them up quickly — no need to process files one-by-one.</p>
+        <ul>
+          <li>Batch process entire folders (recursively) of WAV files</li>
+          <li>Two normalization intents:
+            <ul>
+              <li><strong>Peak dBFS</strong> — best for acoustic analysis (Praat, etc.)</li>
+              <li><strong>LUFS</strong> — best for consistent listening volume</li>
+            </ul>
+          </li>
+          <li>Optional auto-trim of leading/trailing silence</li>
+          <li>Choose output bit depth: 16-bit, 24-bit, or keep original</li>
+          <li>Preview a random sample before you run the full batch</li>
+        </ul>
+      </div>
+      <div>
+        <picture>
+          <img src="./assets/screenshots/app-main.png" alt="App main screen showing input/output selection and options" loading="lazy" />
+        </picture>
+      </div>
+    </section>
+
+    <section class="accent">
+      <div class="container">
+        <h2>Quick start (non‑developers)</h2>
+        <div class="grid two">
+          <div>
+            <h3>macOS (DMG)</h3>
+            <ol>
+              <li>Download the DMG using the button above.</li>
+              <li>Open the DMG and drag “Bulk Audio Normalizer” to Applications.</li>
+              <li>First launch: you may need to right‑click → Open and confirm (unsigned app).</li>
+            </ol>
+          </div>
+          <div>
+            <h3>Windows (Portable EXE)</h3>
+            <ol>
+              <li>Download the EXE using the button above.</li>
+              <li>Double‑click to run. If SmartScreen warns you, choose “More info” → “Run anyway”.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container">
+      <h2>How to use</h2>
+      <ol>
+        <li>Pick your <strong>Input folder</strong>. The app scans it (including subfolders) for WAV files.</li>
+        <li>Pick an <strong>Output folder</strong>. It must be empty (the app enforces this to protect your files).</li>
+        <li>Choose a <strong>Normalization intent</strong>:
+          <ul>
+            <li><strong>Peak dBFS</strong>: keeps peaks below a safe target (good for analysis; no limiter by default).</li>
+            <li><strong>LUFS</strong>: targets a listening loudness (−16 LUFS by default) with a safety limiter.</li>
+          </ul>
+        </li>
+        <li>Optionally turn on <strong>Auto‑trim</strong> to remove leading/trailing silence.</li>
+        <li>Select <strong>Bit depth</strong> (16‑bit, 24‑bit, or Original).</li>
+        <li>Use <strong>Preview</strong> to test a random sample of files with your settings.</li>
+        <li>Click <strong>Start</strong> to process the whole batch. Quit the app to stop.</li>
+      </ol>
+    </section>
+
+    <section class="container">
+      <h2>Screenshots</h2>
+      <div class="grid two">
+        <figure>
+          <img src="./assets/screenshots/preview.png" alt="Preview mode with waveform and A/B controls" loading="lazy" />
+          <figcaption>Preview a random sample and compare before/after.</figcaption>
+        </figure>
+        <figure>
+          <img src="./assets/screenshots/progress.png" alt="Batch progress with per‑file status and ETA" loading="lazy" />
+          <figcaption>Live progress with per‑file phases and ETA.</figcaption>
+        </figure>
+      </div>
+      <p class="small">Place screenshots at <code>docs/assets/screenshots/</code> with filenames: <code>app-main.png</code>, <code>preview.png</code>, <code>progress.png</code>.</p>
+    </section>
+
+    <section class="accent">
+      <div class="container">
+        <h2>FAQ & troubleshooting</h2>
+        <details>
+          <summary>The app says my output folder must be empty.</summary>
+          <p>This is by design to keep your files safe. Make a new empty folder (e.g., “normalized/”) and select that.</p>
+        </details>
+        <details>
+          <summary>What’s the difference between Peak dBFS and LUFS?</summary>
+          <p>Peak dBFS is ideal for acoustic analysis workflows (keeps headroom, no limiter). LUFS targets how loud audio sounds to people (−16 LUFS with a safety limiter to prevent clipping).</p>
+        </details>
+        <details>
+          <summary>It’s still too quiet / too loud.</summary>
+          <p>Try a different target. For Peak, typical targets are −12 to −6 dBFS. For LUFS, −16 is a common spoken‑audio target, but −18 or −14 may fit your context.</p>
+        </details>
+        <details>
+          <summary>How do I stop a batch?</summary>
+          <p>Quit the app. It safely stops all processing.</p>
+        </details>
+        <details>
+          <summary>Do I need to install FFmpeg?</summary>
+          <p>No. The app bundles FFmpeg and FFprobe internally.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>© 2025 Bulk Audio Normalizer · <a href="https://github.com/rulingAnts/bulk_audio_normalizer">GitHub</a> · <a id="release-page-link-footer" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/latest">Latest release</a></p>
+    </div>
+  </footer>
+
+  <script src="./script.js" defer></script>
+</body>
+</html>

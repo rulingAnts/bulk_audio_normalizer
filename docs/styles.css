@@ -1,0 +1,45 @@
+/* Basic responsive, accessible styles */
+:root {
+  --bg: #0f1115;
+  --bg-alt: #1b1f24;
+  --accent: #3b82f6;
+  --accent-alt: #2563eb;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --radius: 6px;
+  --max-width: 980px;
+  --shadow: 0 4px 14px rgba(0,0,0,0.35);
+  --focus: 2px solid #3b82f6;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover, a:focus { text-decoration: underline; }
+.container { max-width: var(--max-width); margin: 0 auto; padding: 1.75rem 1.25rem; }
+.site-header { background: linear-gradient(135deg,#1b2735,#121720); padding: 2.5rem 0 2rem; text-align: center; }
+.site-header h1 { margin: 0 0 .5rem; font-size: clamp(1.9rem,4vw,2.6rem); }
+.tagline { margin: 0 0 1rem; font-size: 1.1rem; color: var(--muted); }
+.cta { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin: 1rem 0; }
+.btn { display: inline-block; padding: .8rem 1.15rem; border-radius: var(--radius); font-weight: 600; background: var(--bg-alt); color: var(--text); border: 1px solid #2b313a; box-shadow: var(--shadow); transition: background .15s,border-color .15s,transform .15s; }
+.btn.primary { background: var(--accent); border-color: var(--accent-alt); }
+.btn.secondary { background: #374151; }
+.btn.disabled { opacity: .55; pointer-events: none; }
+.btn:not(.disabled):hover { transform: translateY(-2px); }
+.btn:focus-visible { outline: var(--focus); }
+.small { font-size: .8rem; color: var(--muted); }
+main section { padding: 2rem 0; }
+.grid.two { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); align-items: start; }
+.accent { background: var(--bg-alt); }
+img { max-width: 100%; height: auto; border-radius: var(--radius); border: 1px solid #2a313a; }
+figure { margin: 0; }
+figcaption { font-size: .75rem; margin-top: .5rem; color: var(--muted); }
+code { background: #222b33; padding: .2rem .4rem; border-radius: 4px; font-size: .85rem; }
+details { background:#222830; padding: .9rem 1rem; border-radius: var(--radius); margin-bottom: .75rem; border:1px solid #2e353d; }
+details[open] { border-color: var(--accent); }
+details summary { cursor: pointer; font-weight:600; }
+.site-footer { text-align: center; font-size: .75rem; padding: 3rem 0 2.5rem; color: var(--muted); }
+.site-footer a { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
