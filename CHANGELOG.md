@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] - 2025-11-07
+
+### Changed
+- Packaging: Windows build now sources `ffmpeg.exe` from a repo‑local zip (`build/win32-resources/ffmpeg-static.zip`) when cross‑building from macOS; no network calls required.
+- Packaging: Removed network download logic from `afterPack.cjs`; added fallback to any existing Windows PE binary in `ffmpeg-static`.
+- Docs: Added advanced packaging notes, Windows developer guidance, and known issues about macOS‑first build scripts.
+
+### Fixed
+- Ensured macOS build normalization does not overwrite Windows binaries and vice versa.
+
 ## [0.3.0] - 2025-11-07
 
 ### Added

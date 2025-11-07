@@ -1,6 +1,6 @@
 {
   "name": "bulk-audio-normalizer",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "description": "Electron app to batch-process WAVs for linguistics: Peak dBFS or LUFS normalization, flexible bit depth, trimming, and responsive batching.",
   "main": "src/main.js",

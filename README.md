@@ -103,6 +103,26 @@ Behavior on macOS vs Windows:
  
 In short: macOS can cross‑build both platforms with this repo’s zip‑based approach; Windows developers may need to adapt `scripts/afterPack.cjs` to their environment before `npm run dist -- --win` works locally.
 
+### Developing on Windows (adjusting the packaging hook)
+
+If you are developing directly on a Windows machine, you can simplify the build:
+
+1. Delete or ignore the repo zip: `build/win32-resources/ffmpeg-static.zip` (it is primarily for macOS cross‑builds).
+2. Install dependencies normally: `npm install` — this will fetch a native Windows `ffmpeg-static` with a valid `ffmpeg.exe`.
+3. Option A (recommended): Leave `scripts/afterPack.cjs` as‑is; it will attempt to extract from the zip (will warn if missing) and then fall back to the already valid PE binary.
+4. Option B (minimal hook): Edit `scripts/afterPack.cjs` and remove the zip extraction function calls, keeping only the pruning and layout normalization logic.
+5. Run the build: `npm run dist -- --win`.
+
+Verifying the binary:
+
+After build, confirm that `dist/win-unpacked/resources/app.asar.unpacked/node_modules/ffmpeg-static/bin/win32/x64/ffmpeg.exe` exists and launches (e.g., `ffmpeg.exe -version`). If that path is valid, the app’s preview and processing features will work.
+
+Troubleshooting on Windows:
+
+- If the hook complains about missing extraction tools, ensure PowerShell (`Expand-Archive`) is available (standard on modern Windows). The fallback to a local PE binary should still succeed.
+- If `ffmpeg.exe` is not copied, check permissions in your working directory and that `node_modules/ffmpeg-static` contains a file starting with `ffmpeg`.
+- To bypass the hook entirely for testing, temporarily remove `"afterPack": "scripts/afterPack.cjs"` from `package.json` build config and rebuild; then restore it before committing.
+
 ## Icons
 
 Prebuilt platform icons are committed under `build/icons/` and used directly by packaging. The icon generation pipeline and any font files are not included in this repository. See `THIRD_PARTY_NOTICES.md` for icon artwork credit.
