@@ -7,6 +7,7 @@ const btnInput = $('#btnInput');
 const btnOutput = $('#btnOutput');
 const btnStart = $('#btnStart');
 const btnCancel = $('#btnCancel');
+const btnClearOutput = $('#btnClearOutput');
 const outputValidation = $('#outputValidation');
 // Notice elements
 const noticeMin = $('#noticeMin');
@@ -68,6 +69,7 @@ const chkFastTrim = $('#fastTrim');
 let inputDir = '';
 let outputDir = '';
 let running = false;
+let stopping = false;
 let fileItems = new Map(); // id -> DOM refs
 let autoScrollFiles = true;
 
@@ -227,11 +229,13 @@ function describePresetForCurrent() {
 
 function setRunning(state) {
   running = state;
-  btnStart.disabled = running || !inputDir || !outputDir;
+  const disableAll = running || stopping;
+  btnStart.disabled = disableAll || !inputDir || !outputDir;
   btnCancel.disabled = !running;
-  btnInput.disabled = running;
-  btnOutput.disabled = running;
-  btnPreview.disabled = running || !inputDir; // can preview without output
+  btnInput.disabled = disableAll;
+  btnOutput.disabled = disableAll;
+  btnClearOutput.disabled = disableAll || !outputDir;
+  btnPreview.disabled = disableAll || !inputDir; // can preview without output
 }
 
 // Persist settings on change
@@ -342,20 +346,35 @@ btnOutput.addEventListener('click', async () => {
     outputDir = dir;
     outputPath.value = dir;
     const empty = await window.api.validateOutputEmpty(dir);
-    outputValidation.textContent = empty ? 'Output folder is empty ✓' : 'Output folder must be empty.';
-    outputValidation.style.color = empty ? '#2ea043' : '#d1242f';
-    btnStart.disabled = running || !inputDir || !outputDir || !empty;
+    if (empty) {
+      outputValidation.textContent = 'Output folder is empty ✓';
+      outputValidation.style.color = '#2ea043';
+    } else {
+      outputValidation.textContent = 'Output folder not empty: existing outputs will be skipped (resume).';
+      outputValidation.style.color = '#6e7781';
+    }
+    btnStart.disabled = (running || stopping) || !inputDir || !outputDir;
   }
+});
+
+btnClearOutput.addEventListener('click', async () => {
+  if (!outputDir) return;
+  const ok = confirm(`Delete ALL contents of:\n${outputDir}\n\nThis cannot be undone.`);
+  if (!ok) return;
+  const res = await window.api.clearOutputFolder(outputDir);
+  if (res) {
+    outputValidation.textContent = 'Output folder is empty ✓';
+    outputValidation.style.color = '#2ea043';
+  } else {
+    outputValidation.textContent = 'Could not clear output folder.';
+    outputValidation.style.color = '#d1242f';
+  }
+  btnStart.disabled = (running || stopping) || !inputDir || !outputDir;
 });
 
 btnStart.addEventListener('click', async () => {
   if (!inputDir || !outputDir) return;
-  const empty = await window.api.validateOutputEmpty(outputDir);
-  if (!empty) {
-    outputValidation.textContent = 'Output folder must be empty.';
-    outputValidation.style.color = '#d1242f';
-    return;
-  }
+  // Resume is supported: if not empty, existing outputs will be skipped.
 
   fileList.innerHTML = '';
   overallBar.style.width = '0%';
@@ -380,9 +399,10 @@ btnStart.addEventListener('click', async () => {
 });
 
 btnCancel.addEventListener('click', () => {
-  // Immediately reflect UI state for responsiveness
-  setRunning(false);
-  batchStatus.textContent = 'Canceled';
+  // Show stopping state immediately; actual "stopped" will be signaled from main
+  stopping = true;
+  batchStatus.textContent = 'Stopping…';
+  setRunning(true); // disables controls while stopping
   try { window.api.cancelProcessing(); } catch {}
 });
 
@@ -474,6 +494,13 @@ window.api.onFileDone(({ fileId }) => {
 window.api.onAllDone(() => {
   setRunning(false);
   batchStatus.textContent = 'Completed';
+  throttleInfo = '';
+});
+
+window.api.onStopped(() => {
+  stopping = false;
+  setRunning(false);
+  batchStatus.textContent = 'Stopped';
   throttleInfo = '';
 });
 

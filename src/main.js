@@ -888,27 +888,53 @@ ipcMain.handle('validate-output-empty', (evt, outDir) => {
   }
 });
 
+ipcMain.handle('clear-output-folder', async (evt, outDir) => {
+  if (!outDir || typeof outDir !== 'string') return false;
+  try {
+    ensureDir(outDir);
+    const entries = fs.readdirSync(outDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue; // keep dotfiles
+      const full = path.join(outDir, entry.name);
+      try { fs.rmSync(full, { recursive: true, force: true }); } catch {}
+    }
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, concurrency = Math.max(1, Math.min(os.cpus().length - 1, 4)) }) => {
   cancelAll = false; // reset batch cancel state
   // Discover files
   const files = listWavFilesRecursive(inputDir);
-  const total = files.length;
-  if (total === 0) {
+  if (files.length === 0) {
     return { ok: false, error: 'No WAV files found in input folder.' };
   }
 
   // Clear state
   activeJobs.clear();
 
-  // Prepare items with IDs
+  // Prepare items with IDs (resume: skip outputs that already exist)
+  let skippedExisting = 0;
   const items = files.map((filePath, idx) => {
     const rel = path.relative(inputDir, filePath);
     const outPath = path.join(outputDir, rel).replace(/\.(wav|wave)$/i, '.wav');
     ensureDir(path.dirname(outPath));
+    if (fs.existsSync(outPath)) {
+      skippedExisting++;
+      return null;
+    }
     const id = `${Date.now()}_${idx}`;
     activeJobs.set(id, { procs: [], canceled: false });
     return { id, in: filePath, out: outPath };
-  });
+  }).filter(Boolean);
+
+  const total = items.length;
+  if (total === 0) {
+    try { mainWindow.webContents.send('log', { fileId: 'batch', phase: 'info', line: `All outputs already exist. Nothing to do.` }); } catch {}
+    return { ok: true, total: 0 };
+  }
 
   // Track progress
   const perFileDuration = new Map();
@@ -916,7 +942,9 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
 
   // Notify renderer about batch start so it can show 0/N immediately
   try { mainWindow.webContents.send('batch-start', { total }); } catch {}
-  try { mainWindow.webContents.send('log', { fileId: 'batch', phase: 'info', line: `Discovered ${total} WAV file(s).` }); } catch {}
+  try {
+    mainWindow.webContents.send('log', { fileId: 'batch', phase: 'info', line: `Discovered ${files.length} WAV file(s); will process ${total} (skipped ${skippedExisting} already present in output).` });
+  } catch {}
 
   // Pre-fetch durations in parallel (but not too many at once)
   await limitConcurrency(items, Math.min(concurrency, 4), async (item) => {
@@ -1018,6 +1046,10 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
   } finally {
     activeJobs.clear();
     try { clearInterval(monitor); } catch {}
+    if (cancelAll) {
+      try { mainWindow.webContents.send('stopped', { reason: 'canceled' }); } catch {}
+      cancelAll = false;
+    }
   }
 });
 

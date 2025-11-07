@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   openPreviewWindow: () => ipcRenderer.invoke('open-preview-window'),
   cancelProcessing: () => ipcRenderer.invoke('cancel-processing'),
   revealPath: (filePath) => ipcRenderer.invoke('reveal-path', filePath),
+  clearOutputFolder: (outDir) => ipcRenderer.invoke('clear-output-folder', outDir),
 
   onProgress: (cb) => ipcRenderer.on('progress-update', (_e, data) => cb(data)),
   onFileStart: (cb) => ipcRenderer.on('file-start', (_e, data) => cb(data)),
@@ -22,4 +23,5 @@ contextBridge.exposeInMainWorld('api', {
   onPreviewFileDone: (cb) => ipcRenderer.on('preview-file-done', (_e, data) => cb(data)),
   onPreviewDone: (cb) => ipcRenderer.on('preview-done', (_e, data) => cb(data)),
   onThrottleEvent: (cb) => ipcRenderer.on('throttle-event', (_e, data) => cb(data)),
+  onStopped: (cb) => ipcRenderer.on('stopped', (_e, data) => cb(data)),
 });
