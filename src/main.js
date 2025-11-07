@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 let mainWindow;
 let previewWindow;
 let activeJobs = new Map(); // key: fileId -> { procs: [ChildProcess], canceled: boolean }
+let cancelAll = false; // batch-level cancel flag for immediate stop
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -603,7 +604,8 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
     pass1FilterParts.push('volumedetect');
 
     const pass1Args = [
-      ...ffVerbosityArgs(settings?.verboseLogs),
+      // Force info level so volumedetect prints its summary
+      '-hide_banner', '-v', 'info',
       ...seekArgs,
       '-i', input,
       ...(threads > 0 ? ['-threads', String(threads)] : []),
@@ -670,6 +672,10 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
     }
     if (!Number.isFinite(gainDb)) gainDb = 0;
     gainDb = Math.max(-30, Math.min(30, gainDb));
+    try {
+      const msg = `Peak mode: measuredMax=${measuredMaxVolume ?? 'n/a'} dB, target=${peakTargetDb} dB, gain=${gainDb.toFixed(2)} dB, onlyBoost=${settings?.peakOnlyBoost !== false}`;
+      mainWindow.webContents.send('log', { fileId, phase: 'analyze', line: msg });
+    } catch {}
     filterParts.push(`volume=${gainDb.toFixed(2)}dB`);
   }
 
@@ -784,6 +790,7 @@ ipcMain.handle('validate-output-empty', (evt, outDir) => {
 });
 
 ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, concurrency = Math.max(1, Math.min(os.cpus().length - 1, 4)) }) => {
+  cancelAll = false; // reset batch cancel state
   // Discover files
   const files = listWavFilesRecursive(inputDir);
   const total = files.length;
@@ -814,6 +821,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
 
   // Pre-fetch durations in parallel (but not too many at once)
   await limitConcurrency(items, Math.min(concurrency, 4), async (item) => {
+    if (cancelAll) return; // skip work when canceled
     const dur = await getDurationSeconds(item.in);
     perFileDuration.set(item.id, dur > 0 ? dur : 1);
   });
@@ -875,6 +883,7 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
 
   try {
     await limitConcurrency(items, () => allowed, async (item) => {
+      if (cancelAll) return; // do not start new items after cancel
       // Notify renderer this file is starting
   const displayName = path.relative(inputDir, item.in);
       mainWindow.webContents.send('file-start', { fileId: item.id, name: displayName });
@@ -899,7 +908,9 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
       mainWindow.webContents.send('file-done', { fileId: item.id, out: item.out });
     });
 
-    mainWindow.webContents.send('all-done', { total });
+    if (!cancelAll) {
+      mainWindow.webContents.send('all-done', { total });
+    }
     return { ok: true, total };
   } catch (err) {
     mainWindow.webContents.send('error', { message: err.message });
@@ -911,13 +922,13 @@ ipcMain.handle('start-processing', async (evt, { inputDir, outputDir, settings, 
 });
 
 ipcMain.handle('cancel-processing', () => {
+  cancelAll = true;
   for (const [, job] of activeJobs) {
     job.canceled = true;
     for (const p of job.procs) {
       try { p.kill('SIGKILL'); } catch {}
     }
   }
-  activeJobs.clear();
   return true;
 });
 

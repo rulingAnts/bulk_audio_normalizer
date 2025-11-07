@@ -243,13 +243,12 @@ function updateAdvancedVisibility() {
   const advPill = document.querySelector('#advModePill');
   if (advPill) advPill.textContent = isPeak ? 'Mode: Peak dBFS' : 'Mode: LUFS';
 
-  const labelFor = (id) => document.querySelector(`label[for="${id}"]`);
-  const showPair = (id, show) => {
-    const el = document.getElementById(id);
-    const lab = labelFor(id);
-    if (el) el.style.display = show ? '' : 'none';
-    if (lab) lab.style.display = show ? '' : 'none';
+  const showGroup = (selector, show) => {
+    document.querySelectorAll(selector).forEach((el) => {
+      el.style.display = show ? '' : 'none';
+    });
   };
+  const labelFor = (id) => document.querySelector(`label[for="${id}"]`);
   const enableDim = (id, on, reason) => {
     const el = document.getElementById(id);
     const lab = labelFor(id);
@@ -267,14 +266,9 @@ function updateAdvancedVisibility() {
     }
   };
 
-  // Hide/show mode-specific controls
-  showPair('lufsTarget', !isPeak);
-  showPair('tpMargin', !isPeak);
-  showPair('limiterLimit', !isPeak);
-  showPair('fastNormalize', !isPeak);
-
-  showPair('peakTargetDb', isPeak);
-  showPair('peakOnlyBoost', isPeak);
+  // Hide/show mode-specific controls via wrappers
+  showGroup('.adv-lufs', !isPeak);
+  showGroup('.adv-peak', isPeak);
 
   // Trimming controls group
   const trimOn = !!chkAutoTrim.checked;
@@ -374,10 +368,11 @@ btnStart.addEventListener('click', async () => {
   }
 });
 
-btnCancel.addEventListener('click', async () => {
-  await window.api.cancelProcessing();
+btnCancel.addEventListener('click', () => {
+  // Immediately reflect UI state for responsiveness
   setRunning(false);
   batchStatus.textContent = 'Canceled';
+  try { window.api.cancelProcessing(); } catch {}
 });
 
 function ensureFileItem(id, name) {

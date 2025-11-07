@@ -4,6 +4,8 @@ out/
 .DS_Store
 release/
 build/
+!build/icons/
+!build/icons/**
 *.dmg
 *.exe
 *.AppImage

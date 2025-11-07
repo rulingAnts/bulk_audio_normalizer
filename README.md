@@ -55,6 +55,10 @@ This packages the app using electron‑builder into:
 
 The build includes FFmpeg/FFprobe and unpacks them from ASAR so they are executable at runtime.
 
+## Icons
+
+Prebuilt platform icons are committed under `build/icons/` and used directly by packaging. The icon generation pipeline and any font files are not included in this repository. See `THIRD_PARTY_NOTICES.md` for icon artwork credit.
+
 ## Normalization intent: Peak dBFS vs LUFS (guidance)
 
 - Peak dBFS mode is intended for linguistic/acoustic analysis. It boosts quiet files so their highest peak reaches a chosen target (default −9 dBFS; typical −12 to −6 dBFS), without attenuating already‑loud files and without any limiter/compressor. This preserves amplitude relationships and headroom, making files suitable for tools like Praat.
@@ -141,6 +145,7 @@ Tip: If ends with white noise aren’t trimmed, make the silence threshold a lar
 
 - If you see errors, open the Debug log panel for details. You can also open DevTools via the app menu.
 - If trimming doesn’t apply, check the log for “Detect config” and “Trim applied” lines, and adjust threshold/padding.
+- If Peak dBFS mode appears to do nothing, check the Debug log for a line like “Peak mode: measuredMax=… dB, target=… dB, gain=… dB”. If measuredMax is n/a, ensure the analysis pass ran (it should). If gain is 0.00 dB with a quiet file, verify the “Only boost (don’t attenuate)” toggle and your target (e.g., −9 dBFS).
 - If a file fails to process, the batch will stop and report the error; re‑run after addressing the issue.
 
 ## Glossary (simple explanations)
@@ -153,7 +158,12 @@ Tip: If ends with white noise aren’t trimmed, make the silence threshold a lar
 - Concurrency: how many files are processed at the same time.
 - Threads per process: how much CPU a single file is allowed to use. Fewer threads per file can help when many files run in parallel.
 
+## Attribution
+
+Code generated almost entirely by VS Code Copilot (GPT-5), with some consultation with Claude/Sonet 4.5 about ideal settings for acoustic analysis / language documentation.
+
 ## License and third‑party notices
 
-- License: AGPL‑3.0‑or‑later (see `LICENSE`)
+- Copyright © 2025 Seth Johnston
+- License: AGPL‑3.0 (see `LICENSE`)
 - Third‑party notices: see `THIRD_PARTY_NOTICES.md`

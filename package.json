@@ -1,6 +1,6 @@
 {
   "name": "bulk-audio-normalizer",
-  "version": "0.3.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Electron app to batch-process WAVs for linguistics: Peak dBFS or LUFS normalization, flexible bit depth, trimming, and responsive batching.",
   "main": "src/main.js",
@@ -11,10 +11,13 @@
     "postinstall": "electron-builder install-app-deps || true"
   },
   "author": "",
-  "license": "AGPL-3.0-or-later",
+  "license": "AGPL-3.0-only",
   "build": {
-    "appId": "com.example.bulk-audio-normalizer",
+    "appId": "net.iraobi.bulk-audio-normalizer",
     "productName": "Bulk Audio Normalizer",
+    "directories": {
+      "buildResources": "build"
+    },
     "files": [
       "src/**",
       "package.json",
@@ -24,8 +27,17 @@
       "**/node_modules/ffmpeg-static/**",
       "**/node_modules/ffprobe-static/**"
     ],
-    "mac": { "target": "dmg" },
-    "win": { "target": "portable" }
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icons/icon.icns"
+    },
+    "win": {
+      "target": "portable",
+      "icon": "build/icons/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icons"
+    }
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0",

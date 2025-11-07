@@ -39,7 +39,7 @@
         <p>
           <span class="icon" aria-hidden="true">⚠️</span>
           <strong>IMPORTANT:</strong><br />
-          &nbsp;<br />Always keep your original, unprocessed recordings as archival masters. This tool applies loudness normalization and silence trimming, which are generally acceptable for acoustic analysis, but you must document all processing in your methods. Never apply heavy noise reduction, EQ, or compression that could affect formant values or temporal measurements. Transparency and consistency are key to research validity. See
+          &nbsp;<br />Always keep your original, unprocessed recordings as archival masters. This tool supports two normalization intents: <em>Peak dBFS</em> (recommended for acoustic analysis/language documentation; preserves amplitude relationships and headroom) and <em>LUFS</em> (for consistent listening; uses a limiter to prevent clipping). Normalization and silence trimming are generally acceptable for analysis, but document all processing in your methods. Avoid heavy noise reduction, EQ, or compression that could affect formants or timing. See
           <a href="https://www.paradisec.org.au/deposit/audio-video-formats/" target="_blank" rel="noopener">PARADISEC</a> and
           <a href="https://www.elararchive.org/requirements/audio/" target="_blank" rel="noopener">ELAR</a> guidelines for best practices.
         </p>
@@ -51,16 +51,17 @@
           <button id="btnNoticeMinusFull" class="notice-btn" aria-label="Collapse notice">−</button>
         </div>
         <p><span class="icon" aria-hidden="true">⚠️</span> <strong>IMPORTANT: Data Integrity &amp; Archiving</strong><br /></p>
-        <p>This tool applies loudness normalization (-16 LUFS) and silence trimming to your audio files. Before processing:</p>
+        <p>This tool can apply normalization and silence trimming to your audio files. Before processing:</p>
         <ul>
           <li><strong>ALWAYS</strong> keep your original, unprocessed recordings — these are your archival masters</li>
           <li>Store originals in a lossless format (WAV, FLAC) with no prior processing</li>
           <li>Document all processing steps for your research methods section</li>
         </ul>
-        <p>What this tool does (generally acceptable for acoustic analysis):</p>
+        <p>Normalization intents:</p>
         <ul>
-          <li>Loudness normalization (amplitude scaling only)</li>
-          <li>Silence trimming (non-destructive editing)</li>
+          <li><strong>Peak dBFS</strong> (default, recommended for analysis/documentation): Analyze the file’s peak and boost quiet files up to a target (e.g., −9 dBFS) without limiting or compression; preserves amplitude relationships and headroom.</li>
+          <li><strong>LUFS</strong> (for consistent listening): EBU R128 loudness normalization (typically −16 LUFS) with a safety limiter to prevent clipping for playback.</li>
+          <li>Silence trimming (non-destructive cut of leading/trailing silences) with optional padding and conservative settings.</li>
         </ul>
         <p>What you should NOT do elsewhere:</p>
         <ul>
@@ -68,7 +69,7 @@
           <li>Equalization, compression, or pitch correction</li>
           <li>Saving only lossy formats (MP3, AAC) for analysis</li>
         </ul>
-        <p>For valid acoustic phonetic analysis: Transparency and consistency matter more than perfect recordings. Document your recording conditions, equipment, and all processing steps.</p>
+        <p>For valid acoustic phonetic analysis: Transparency and consistency matter more than perfect recordings. Document recording conditions, equipment, chosen normalization intent (Peak or LUFS) and targets, and any trimming settings.</p>
         <p>Best practices resources:</p>
         <ul>
           <li>PARADISEC audio guidelines: <a href="https://www.paradisec.org.au/deposit/audio-video-formats/" target="_blank" rel="noopener">https://www.paradisec.org.au/deposit/audio-video-formats/</a></li>
@@ -117,7 +118,7 @@
               <option value="peak" selected>Acoustic Analysis / Language Documentation (peak dBFS)</option>
               <option value="lufs">Participatory Analysis / Human Ears (−16 LUFS + limiter)</option>
             </select>
-            <span class="info-icon" aria-hidden="true" title="Participatory Analysis/Human Ears: normalize to −16 LUFS with a safety limiter (consistent listening). Acoustic Analysis/Language Documentation: set peak level (dBFS) to keep headroom (−12 to −6 dBFS), suitable for tools like Praat; LUFS isn’t typically specified for linguistics field work.">i</span>
+            <span class="info-icon" aria-hidden="true" data-tip="Participatory Analysis/Human Ears: normalize to −16 LUFS with a safety limiter (consistent listening). Acoustic Analysis/Language Documentation: set peak level (dBFS) to keep headroom (−12 to −6 dBFS), suitable for tools like Praat; LUFS isn’t typically specified for linguistics field work.">i</span>
           </div>
           <div class="hint">Peak dBFS boosts quiet files up to a target without limiting or compression (best for Praat/measurement). Use LUFS for consistent listening and reviews.</div>
           <div class="row" style="margin-top:6px; align-items:center; gap:8px;">
@@ -127,29 +128,18 @@
               <option value="24">24‑bit (limit to 24‑bit; no up‑convert from 16‑bit)</option>
               <option value="original">Original (no limit)</option>
             </select>
-            <span class="info-icon" aria-hidden="true" title="Some archives prefer 24‑bit WAVs; field tools like Dekereke and FieldWorks may require 16‑bit. Many phonologists find 16‑bit sufficient for vowel formants and tone, with much smaller files and lower CPU/RAM load. 'Original (no limit)' keeps the source bit depth and can increase processing load and storage—generally not required by academic archives.">i</span>
+            <span class="info-icon" aria-hidden="true" data-tip="Some archives prefer 24‑bit WAVs; field tools like Dekereke and FieldWorks may require 16‑bit. Many phonologists find 16‑bit sufficient for vowel formants and tone, with much smaller files and lower CPU/RAM load. 'Original (no limit)' keeps the source bit depth and can increase processing load and storage—generally not required by academic archives.">i</span>
           </div>
           <div class="hint">Default to 16‑bit unless your archive requires 24‑bit. “Original” preserves float/bit depth for specialist analysis.</div>
         </div>
         <div class="actions-block">
           <div class="actions">
             <button id="btnStart" disabled>Start</button>
-            <button id="btnCancel" disabled>Cancel</button>
+            <button id="btnCancel" disabled aria-label="Stop processing">Stop</button>
           </div>
           <div class="hint"></div>
         </div>
       </div>
-    </section>
-
-    <section class="overall">
-      <div class="row label-row">
-        <span>Overall progress</span>
-        <span id="overallCount">0/0</span>
-        <span id="overallPct">0%</span>
-        <span id="overallTime" class="time">—</span>
-      </div>
-      <div class="progress"><div id="overallBar" class="bar" style="width:0%"></div></div>
-      <div id="batchStatus" class="hint"></div>
     </section>
 
     <section class="preview">
@@ -163,28 +153,51 @@
       <div id="previewList" class="preview-list"></div>
     </section>
 
+
+    <section class="overall">
+      <div class="row label-row">
+        <span>Overall progress</span>
+        <span id="overallCount">0/0</span>
+        <span id="overallPct">0%</span>
+        <span id="overallTime" class="time">—</span>
+      </div>
+      <div class="progress"><div id="overallBar" class="bar" style="width:0%"></div></div>
+      <div id="batchStatus" class="hint"></div>
+    </section>
+
     <details id="advSettings" class="settings">
       <summary>Advanced… <span id="advModePill" class="pill">Mode: Peak dBFS</span></summary>
       <div class="grid">
-    <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Normalization</div>
-        <label for="lufsTarget">LUFS target</label>
-        <input id="lufsTarget" type="number" step="0.1" value="-16" />
+        <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Normalization</div>
 
-        <label for="peakTargetDb">Peak target (dBFS)</label>
-        <input id="peakTargetDb" type="number" step="0.1" value="-9" />
+        <div class="adv-pair adv-lufs" id="row-lufsTarget">
+          <label for="lufsTarget">LUFS target</label>
+          <input id="lufsTarget" type="number" step="0.1" value="-16" />
+        </div>
 
-    <label for="peakOnlyBoost" title="Peak mode only: Boost quiet files up to the target peak level; do not turn loud files down.">Only boost (don’t attenuate) <span class="info-icon" aria-hidden="true" title="Peak mode only: Boost quiet files up to the target peak level; do not turn loud files down.">i</span></label>
-    <input id="peakOnlyBoost" type="checkbox" checked />
+        <div class="adv-pair adv-peak" id="row-peakTargetDb">
+          <label for="peakTargetDb">Peak target (dBFS)</label>
+          <input id="peakTargetDb" type="number" step="0.1" value="-9" />
+        </div>
 
-        <label for="tpMargin">True-peak target (dBFS)</label>
-        <input id="tpMargin" type="number" step="0.1" value="-1" />
+        <div class="adv-pair adv-peak" id="row-peakOnlyBoost">
+          <label for="peakOnlyBoost">Only boost (don’t attenuate) <span class="info-icon" aria-hidden="true" data-tip="Peak mode only: Boost quiet files up to the target peak level; do not turn loud files down.">i</span></label>
+          <input id="peakOnlyBoost" type="checkbox" checked />
+        </div>
 
-        <label for="limiterLimit">Limiter ceiling (linear 0..1)</label>
-        <input id="limiterLimit" type="number" step="0.01" min="0" max="1" value="0.97" />
+        <div class="adv-pair adv-lufs" id="row-tpMargin">
+          <label for="tpMargin">True-peak target (dBFS)</label>
+          <input id="tpMargin" type="number" step="0.1" value="-1" />
+        </div>
+
+        <div class="adv-pair adv-lufs" id="row-limiterLimit">
+          <label for="limiterLimit">Limiter ceiling (linear 0..1)</label>
+          <input id="limiterLimit" type="number" step="0.01" min="0" max="1" value="0.97" />
+        </div>
         
     <div class="group-title" style="grid-column: 1 / -1; height: 8px;"></div>
     <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Performance</div>
-  <label for="concurrency" title="Files processed at the same time. Recommended: cores − 1. Higher can be faster but uses more CPU/disk.">Concurrency <span class="info-icon" aria-hidden="true" title="Files processed at the same time. Recommended: cores − 1. Higher can be faster but uses more CPU/disk.">i</span></label>
+  <label for="concurrency">Concurrency <span class="info-icon" aria-hidden="true" data-tip="Files processed at the same time. Recommended: cores − 1. Higher can be faster but uses more CPU/disk.">i</span></label>
   <input id="concurrency" type="number" min="1" max="16" value="4" title="Files processed at the same time (parallel jobs)" />
         
         <div class="sep" style="grid-column: 1 / -1; height: 8px;"></div>
@@ -192,7 +205,7 @@
   <label for="fastNormalize">Fast normalize (single pass)</label>
   <input id="fastNormalize" type="checkbox" />
 
-  <label for="ffmpegThreads" title="CPU threads per file. 0 = auto. 1 recommended for Balanced. Higher may speed heavy filters but reduces overall parallelism.">FFmpeg threads per process (optional) <span class="info-icon" aria-hidden="true" title="CPU threads per file. 0 = auto. 1 recommended for Balanced. Higher may speed heavy filters but reduces overall parallelism.">i</span></label>
+  <label for="ffmpegThreads">FFmpeg threads per process (optional) <span class="info-icon" aria-hidden="true" data-tip="CPU threads per file. 0 = auto. 1 recommended for Balanced. Higher may speed heavy filters but reduces overall parallelism.">i</span></label>
   <input id="ffmpegThreads" type="number" min="0" placeholder="auto" title="CPU threads used per file (0 = auto)" />
         
     <div class="group-title" style="grid-column: 1 / -1; height: 8px;"></div>
@@ -248,6 +261,9 @@
 
     <footer>
       <small>Tip: Hundreds of short WAVs are fine. The app won’t modify originals; it writes new files to the output folder.</small>
+      <small style="display:block; margin-top:6px; color:#666;">
+        © 2025 Seth Johnston • License: GNU Affero General Public License v3 • Code generated almost entirely by VS Code Copilot (GPT-5), with some consultation with Claude/Sonet 4.5 about ideal settings for acoustic analysis / language documentation.
+      </small>
     </footer>
 
     <!-- WaveSurfer UMD from local node_modules -->
