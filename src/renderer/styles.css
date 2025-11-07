@@ -74,6 +74,12 @@ footer { padding: 12px 20px; border-top: 1px solid #eee; color: #777; }
 .settings input[type=checkbox] { width: 16px; height: 16px; }
 .settings .grid .sep { border-top: 1px dashed #ddd; }
 
+/* Tiny status pill used in Advanced summary */
+.pill { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: #eef6ff; color: #1f6feb; font-size: 12px; vertical-align: middle; }
+
+/* Dim labels when associated control is disabled */
+label.dimmed { opacity: 0.55; }
+
 /* Small info icon used for native title tooltips */
 .info-icon {
 	display: inline-block;

@@ -664,8 +664,9 @@ async function loudnormTwoPassWithLimiter({ input, output, fileId, onProgress, s
     // Peak mode: compute gain to hit target peak while staying below 0 dBFS
     let gainDb = 0;
     if (typeof measuredMaxVolume === 'number' && Number.isFinite(measuredMaxVolume)) {
-      // Upward-only normalization: boost until peak reaches target; do not attenuate if already above target
-      gainDb = Math.max(0, peakTargetDb - measuredMaxVolume); // e.g., -9 - (-18) = +9 dB; if -9 - (-6) = -3 -> clamp to 0
+      const ideal = peakTargetDb - measuredMaxVolume; // e.g., -9 - (-18) = +9 dB; -9 - (-6) = -3 dB
+      const onlyBoost = settings?.peakOnlyBoost !== false; // default true
+      gainDb = onlyBoost ? Math.max(0, ideal) : ideal;
     }
     if (!Number.isFinite(gainDb)) gainDb = 0;
     gainDb = Math.max(-30, Math.min(30, gainDb));

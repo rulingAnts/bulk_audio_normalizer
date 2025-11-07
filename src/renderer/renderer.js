@@ -38,6 +38,7 @@ const previewInfo = $('#previewInfo');
 // Settings inputs
 const inLufs = $('#lufsTarget');
 const inPeakTarget = $('#peakTargetDb');
+const chkPeakOnlyBoost = $('#peakOnlyBoost');
 const inTP = $('#tpMargin');
 const inLimiter = $('#limiterLimit');
 const inConc = $('#concurrency');
@@ -108,6 +109,7 @@ function loadSettings() {
     if (s.targetBitDepth != null) bitDepthSelect.value = String(s.targetBitDepth);
     if (s.normMode) normModeSelect.value = s.normMode;
     if (s.peakTargetDb != null) inPeakTarget.value = String(s.peakTargetDb);
+    if (typeof s.peakOnlyBoost === 'boolean') chkPeakOnlyBoost.checked = s.peakOnlyBoost; else chkPeakOnlyBoost.checked = true;
   } catch {}
   // If settings exist but concurrency not set, set smart default
   try {
@@ -143,6 +145,7 @@ function currentSettings() {
     fastNormalize: !!chkFastNormalize.checked,
     ffmpegThreads: Math.max(0, Number(inFfmpegThreads.value || 0)) || 0,
     fastTrim: !!chkFastTrim.checked,
+    peakOnlyBoost: !!chkPeakOnlyBoost.checked,
     targetBitDepth: (() => {
       const v = (bitDepthSelect?.value || '16');
       if (v === 'original') return 'original';
@@ -221,7 +224,7 @@ function setRunning(state) {
 }
 
 // Persist settings on change
-[inLufs, inPeakTarget, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim, bitDepthSelect, normModeSelect].forEach((el) => el.addEventListener('change', () => {
+[inLufs, inPeakTarget, chkPeakOnlyBoost, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim, bitDepthSelect, normModeSelect].forEach((el) => el.addEventListener('change', () => {
   saveSettings();
   const p = describePresetForCurrent();
   profileSelect.value = p;
@@ -229,8 +232,60 @@ function setRunning(state) {
   else if (p === 'balanced') profileDesc.textContent = 'Balanced: good speed and safe defaults. Fast trim on; precise 2-pass normalize.';
   else if (p === 'quality') profileDesc.textContent = 'Highest quality/safety: most cautious trimming and full accuracy; slightly slower.';
   else profileDesc.textContent = 'Custom: your own combination. Open Advanced… to tweak.';
+  updateAdvancedVisibility();
 }));
 loadSettings();
+updateAdvancedVisibility();
+
+function updateAdvancedVisibility() {
+  const mode = (normModeSelect && normModeSelect.value) === 'lufs' ? 'lufs' : 'peak';
+  const isPeak = mode === 'peak';
+  const advPill = document.querySelector('#advModePill');
+  if (advPill) advPill.textContent = isPeak ? 'Mode: Peak dBFS' : 'Mode: LUFS';
+
+  const labelFor = (id) => document.querySelector(`label[for="${id}"]`);
+  const showPair = (id, show) => {
+    const el = document.getElementById(id);
+    const lab = labelFor(id);
+    if (el) el.style.display = show ? '' : 'none';
+    if (lab) lab.style.display = show ? '' : 'none';
+  };
+  const enableDim = (id, on, reason) => {
+    const el = document.getElementById(id);
+    const lab = labelFor(id);
+    if (!el) return;
+    el.disabled = !on;
+    if (lab) {
+      if (!on) lab.classList.add('dimmed'); else lab.classList.remove('dimmed');
+    }
+    if (!on && reason) {
+      if (!el.dataset.originalTitle) el.dataset.originalTitle = el.getAttribute('title') || '';
+      el.setAttribute('title', reason);
+    } else if (on && el.dataset.originalTitle !== undefined) {
+      el.setAttribute('title', el.dataset.originalTitle);
+      delete el.dataset.originalTitle;
+    }
+  };
+
+  // Hide/show mode-specific controls
+  showPair('lufsTarget', !isPeak);
+  showPair('tpMargin', !isPeak);
+  showPair('limiterLimit', !isPeak);
+  showPair('fastNormalize', !isPeak);
+
+  showPair('peakTargetDb', isPeak);
+  showPair('peakOnlyBoost', isPeak);
+
+  // Trimming controls group
+  const trimOn = !!chkAutoTrim.checked;
+  enableDim('trimPadMs', trimOn, 'Disabled because Auto-trim is OFF');
+  enableDim('trimThresholdDb', trimOn, 'Disabled because Auto-trim is OFF');
+  enableDim('trimMinDurationMs', trimOn, 'Disabled because Auto-trim is OFF');
+  enableDim('trimMinFileMs', trimOn, 'Disabled because Auto-trim is OFF');
+  enableDim('trimConservative', trimOn, 'Disabled because Auto-trim is OFF');
+  enableDim('trimHPF', trimOn, 'Disabled because Auto-trim is OFF');
+  enableDim('fastTrim', trimOn, 'Disabled because Auto-trim is OFF');
+}
 
 // Notice behavior (three levels: min <-> brief <-> full)
 const NOTICE_STATE_KEY = 'ban_notice_state'; // 'min' | 'brief' | 'full'

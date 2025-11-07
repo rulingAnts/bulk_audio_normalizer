@@ -164,31 +164,39 @@
     </section>
 
     <details id="advSettings" class="settings">
-      <summary>Advanced…</summary>
+      <summary>Advanced… <span id="advModePill" class="pill">Mode: Peak dBFS</span></summary>
       <div class="grid">
+    <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Normalization</div>
         <label for="lufsTarget">LUFS target</label>
         <input id="lufsTarget" type="number" step="0.1" value="-16" />
 
         <label for="peakTargetDb">Peak target (dBFS)</label>
         <input id="peakTargetDb" type="number" step="0.1" value="-9" />
 
+    <label for="peakOnlyBoost" title="Peak mode only: Boost quiet files up to the target peak level; do not turn loud files down.">Only boost (don’t attenuate) <span class="info-icon" aria-hidden="true" title="Peak mode only: Boost quiet files up to the target peak level; do not turn loud files down.">i</span></label>
+    <input id="peakOnlyBoost" type="checkbox" checked />
+
         <label for="tpMargin">True-peak target (dBFS)</label>
         <input id="tpMargin" type="number" step="0.1" value="-1" />
 
         <label for="limiterLimit">Limiter ceiling (linear 0..1)</label>
         <input id="limiterLimit" type="number" step="0.01" min="0" max="1" value="0.97" />
-
+        
+    <div class="group-title" style="grid-column: 1 / -1; height: 8px;"></div>
+    <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Performance</div>
   <label for="concurrency" title="Files processed at the same time. Recommended: cores − 1. Higher can be faster but uses more CPU/disk.">Concurrency <span class="info-icon" aria-hidden="true" title="Files processed at the same time. Recommended: cores − 1. Higher can be faster but uses more CPU/disk.">i</span></label>
   <input id="concurrency" type="number" min="1" max="16" value="4" title="Files processed at the same time (parallel jobs)" />
         
         <div class="sep" style="grid-column: 1 / -1; height: 8px;"></div>
-
+  
   <label for="fastNormalize">Fast normalize (single pass)</label>
   <input id="fastNormalize" type="checkbox" />
 
   <label for="ffmpegThreads" title="CPU threads per file. 0 = auto. 1 recommended for Balanced. Higher may speed heavy filters but reduces overall parallelism.">FFmpeg threads per process (optional) <span class="info-icon" aria-hidden="true" title="CPU threads per file. 0 = auto. 1 recommended for Balanced. Higher may speed heavy filters but reduces overall parallelism.">i</span></label>
   <input id="ffmpegThreads" type="number" min="0" placeholder="auto" title="CPU threads used per file (0 = auto)" />
-
+        
+    <div class="group-title" style="grid-column: 1 / -1; height: 8px;"></div>
+    <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Trimming</div>
         <label for="autoTrim">Auto-trim leading/trailing silence</label>
         <input id="autoTrim" type="checkbox" checked />
 
@@ -214,7 +222,7 @@
         <input id="trimHPF" type="checkbox" />
 
         <div class="sep" style="grid-column: 1 / -1; height: 8px;"></div>
-
+        <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Diagnostics</div>
         <label for="verboseLogs">Verbose FFmpeg logs</label>
         <input id="verboseLogs" type="checkbox" />
       </div>

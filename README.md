@@ -78,6 +78,7 @@ Tip: For language documentation workflows, default to Peak dBFS. For outreach or
 
 - Normalization intent: Peak dBFS or LUFS
   - Peak target (dBFS): default −9; recommended range −12 to −6
+	- Only boost (don’t attenuate) in Peak mode: ON by default
   - LUFS target (I): default −16 LUFS
   - Limiter ceiling (LUFS mode): linear amplitude 0..1 (default 0.97)
 - Bit depth: 16‑bit, 24‑bit (no 16→24 up‑convert), or Original (preserve)
