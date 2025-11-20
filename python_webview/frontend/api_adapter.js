@@ -126,12 +126,47 @@ window.api = {
     window._batchErrorCallback = callback;
   },
 
+  onPreviewFileDone: (callback) => {
+    window._previewFileCallback = callback;
+  },
+
+  onPreviewDone: (callback) => {
+    window._previewDoneCallback = callback;
+  },
+
   onDebugInfo: (callback) => {
     // Get FFmpeg info on load
     fetch(`${API_BASE}/ffmpeg-info`)
       .then(r => r.json())
       .then(info => callback(info))
       .catch(e => console.error('Failed to get FFmpeg info:', e));
+  },
+
+  /**
+   * Open preview window
+   */
+  openPreviewWindow: async () => {
+    if (window.pywebview) {
+      return await window.pywebview.api.open_preview_window();
+    }
+    return false;
+  },
+
+  /**
+   * Start preview processing
+   */
+  startPreview: async ({ inputDir, settings, sampleSize, concurrency }) => {
+    const response = await fetch(`${API_BASE}/start-preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        inputPath: inputDir, 
+        settings, 
+        sampleSize, 
+        concurrency 
+      })
+    });
+    return await response.json();
   },
 
   /**

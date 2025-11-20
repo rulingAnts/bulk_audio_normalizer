@@ -289,6 +289,120 @@ def reveal_file():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/start-preview', methods=['POST'])
+def start_preview():
+    """
+    Start preview processing.
+    
+    Request body:
+        {
+            "inputPath": "/path/to/input",
+            "settings": {...},
+            "sampleSize": 5,
+            "concurrency": 2
+        }
+    
+    Response:
+        {
+            "ok": true,
+            "tmpBase": "/tmp/preview-xxx"
+        }
+    """
+    import tempfile
+    import random
+    
+    data = request.json
+    input_path = data.get('inputPath')
+    settings = data.get('settings', {})
+    sample_size = min(50, max(1, data.get('sampleSize', 5)))
+    concurrency = min(2, data.get('concurrency', 2))
+    
+    if not input_path or not os.path.isdir(input_path):
+        return jsonify({'ok': False, 'error': 'Invalid input path'}), 400
+        
+    # Scan for WAV files
+    wav_files = []
+    
+    def walk_dir(dirpath):
+        try:
+            for entry in os.scandir(dirpath):
+                if entry.is_dir(follow_symlinks=False):
+                    walk_dir(entry.path)
+                elif entry.is_file() and entry.name.lower().endswith(('.wav', '.wave')):
+                    wav_files.append(entry.path)
+        except PermissionError:
+            pass
+            
+    walk_dir(input_path)
+    
+    if not wav_files:
+        return jsonify({'ok': False, 'error': 'No WAV files found for preview.'})
+        
+    # Random sample
+    sample = random.sample(wav_files, min(sample_size, len(wav_files)))
+    
+    # Create temp directory
+    tmp_base = tempfile.mkdtemp(prefix='ban-preview-')
+    
+    # Store preview state
+    processing_state['preview_running'] = True
+    processing_state['preview_tmp'] = tmp_base
+    
+    # Start preview processing in background
+    thread = threading.Thread(
+        target=_preview_worker,
+        args=(sample, tmp_base, input_path, settings)
+    )
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({'ok': True, 'tmpBase': tmp_base})
+
+
+def _preview_worker(files: List[str], tmp_base: str, input_base: str, settings: Dict):
+    """Worker thread for preview processing."""
+    try:
+        for idx, file_path in enumerate(files):
+            if not processing_state.get('preview_running', False):
+                break
+                
+            try:
+                # Generate output path
+                rel_path = os.path.relpath(file_path, input_base)
+                out_path = os.path.join(tmp_base, rel_path)
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                
+                file_id = f"preview_{idx}"
+                
+                def progress_cb(job_id, phase, status, pct):
+                    pass  # Preview doesn't need progress updates
+                    
+                def log_cb(job_id, phase, message):
+                    pass  # Preview doesn't need logs
+                    
+                normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                
+                # Send completion to preview window
+                if 'preview_file_callback' in processing_state['callbacks']:
+                    processing_state['callbacks']['preview_file_callback'](
+                        file_path, out_path, rel_path, tmp_base
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Preview failed for {file_path}: {e}")
+                
+        # Send completion
+        if 'preview_done_callback' in processing_state['callbacks']:
+            processing_state['callbacks']['preview_done_callback'](
+                len(files), tmp_base
+            )
+            
+    except Exception as e:
+        logger.error(f"Preview worker error: {e}")
+    finally:
+        processing_state['preview_running'] = False
+
+
 # Serve frontend files
 @app.route('/')
 def index():
@@ -302,11 +416,13 @@ def serve_frontend(path):
     return send_from_directory('../frontend', path)
 
 
-def set_callbacks(progress_cb, log_cb, completion_cb, error_cb):
+def set_callbacks(progress_cb, log_cb, completion_cb, error_cb, preview_file_cb=None, preview_done_cb=None):
     """Set callbacks for processing updates."""
     processing_state['callbacks'] = {
         'progress_callback': progress_cb,
         'log_callback': log_cb,
         'completion_callback': completion_cb,
-        'error_callback': error_cb
+        'error_callback': error_cb,
+        'preview_file_callback': preview_file_cb,
+        'preview_done_callback': preview_done_cb
     }
