@@ -2,6 +2,8 @@
 
 Electron app to batch‑process WAV files for linguistics and fieldwork. Supports two normalization intents — Peak dBFS (default, for acoustic analysis) and LUFS (for consistent listening) — plus flexible bit‑depth output (16‑bit, 24‑bit, or preserve original) with a safety limiter available in LUFS mode. Built for very large batches of short files with responsive UI and careful performance controls.
 
+**NEW:** A Python WebView version is now available in the `python_webview/` subdirectory, which provides better subprocess management and process cleanup. See [python_webview/README.md](python_webview/README.md) for details.
+
 > Looking for a simple download (no building)? Visit the user site: **GitHub Pages version of this repository's `docs/` folder** (enable Pages -> Deploy from `main` / `docs`). Once enabled it will be available at:
 > `https://rulingAnts.github.io/bulk_audio_normalizer/` — includes direct download buttons, screenshots, and a beginner Quick Start guide.
 
@@ -26,11 +28,21 @@ Electron app to batch‑process WAV files for linguistics and fieldwork. Support
 
 ## Requirements
 
+### Electron Version (default)
+
 - macOS, Windows, or Linux
 - No external FFmpeg install required: the app uses `ffmpeg-static` and `ffprobe-static`
 - Node.js 18+
 
+### Python WebView Version (alternative)
+
+- Python 3.8 or higher
+- FFmpeg (uses binaries from Electron version if available, or system FFmpeg)
+- See [python_webview/README.md](python_webview/README.md) for setup instructions
+
 ## Run it
+
+### Electron Version
 
 ```bash
 npm install
@@ -38,6 +50,16 @@ npm start
 ```
 
 This launches the Electron app in development mode.
+
+### Python WebView Version
+
+```bash
+cd python_webview
+pip install -r requirements.txt
+python main.py
+```
+
+See [python_webview/QUICKSTART.md](python_webview/QUICKSTART.md) for detailed setup instructions.
 
 ## Preview mode (random spot check)
 
