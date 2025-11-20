@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preview - Python Version</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body { padding: 10px 12px; }
+      header { padding: 0 0 8px; border-bottom: 1px solid #eee; margin-bottom: 10px; }
+      header h1 { font-size: 16px; margin: 0; }
+      .toolbar { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Preview</h1>
+      <div id="previewInfo" class="hint"></div>
+      <div class="toolbar">
+        <button id="btnRevealFolder">Reveal preview folder</button>
+      </div>
+    </header>
+    <div id="previewList" class="preview-list"></div>
+
+    <!-- WaveSurfer for waveform visualization -->
+    <script src="https://unpkg.com/wavesurfer.js@6.6.4/dist/wavesurfer.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@6.6.4/dist/plugin/wavesurfer.regions.min.js"></script>
+    <script src="preview_adapter.js"></script>
+    <script src="preview.js"></script>
+  </body>
+</html>
