@@ -25,7 +25,7 @@
 | LUFS normalization | ✅ | ✅ |
 | Silence trimming | ✅ | ✅ |
 | Batch processing | ✅ | ✅ |
-| Preview with waveforms | ✅ | ❌ (not yet implemented) |
+| Preview with waveforms | ✅ | ✅ |
 | Adaptive throttling | ✅ | ✅ |
 | Progress tracking | ✅ | ✅ |
 | Debug logs | ✅ | ✅ |

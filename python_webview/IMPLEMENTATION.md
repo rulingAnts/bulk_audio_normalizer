@@ -261,10 +261,9 @@ The versions share:
 
 ## Known Limitations
 
-1. **Preview window**: Not yet implemented (would need separate WebView window)
-2. **WaveSurfer.js**: Not included (preview feature)
-3. **Settings persistence**: Uses localStorage instead of Electron store
-4. **Auto-update**: Not available (Electron's auto-updater not present)
+1. ~~**Preview window**: Not yet implemented (would need separate WebView window)~~ ✅ Now implemented!
+2. **Settings persistence**: Uses localStorage instead of Electron store
+3. **Auto-update**: Not available (Electron's auto-updater not present)
 
 These are acceptable trade-offs for the improved subprocess management.
 
@@ -279,6 +278,8 @@ Possible improvements:
 
 ## Conclusion
 
-The Python WebView version successfully addresses the subprocess management issues of the Electron version while maintaining feature parity for the core functionality. The use of `psutil` provides reliable, cross-platform process control that was difficult to achieve with Node.js child_process.
+## Conclusion
 
-Users experiencing process cleanup issues with the Electron version should try the Python version as a drop-in replacement.
+The Python WebView version successfully addresses the subprocess management issues of the Electron version while maintaining full feature parity including the preview window. The use of `psutil` provides reliable, cross-platform process control that was difficult to achieve with Node.js child_process.
+
+Users experiencing process cleanup issues with the Electron version should try the Python version as a drop-in replacement with all features intact.

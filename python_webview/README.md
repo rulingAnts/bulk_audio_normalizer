@@ -13,7 +13,7 @@ Same features as the Electron version:
 - Flexible bit depth (16-bit, 24-bit, or preserve original)
 - Auto-trim silence with adjustable parameters
 - Batch processing with adaptive throttling
-- Preview mode for random sampling
+- Preview mode with waveform visualization (A/B comparison)
 - Responsive UI with progress tracking
 
 ## Requirements
