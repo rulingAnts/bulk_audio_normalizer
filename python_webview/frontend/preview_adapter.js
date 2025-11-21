@@ -2,12 +2,45 @@
  * API adapter for preview window in Python WebView version.
  */
 
+// Wait for pywebview to be ready
+function waitForPywebview() {
+  return new Promise((resolve) => {
+    const checkReady = () => {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_audio_file) {
+        console.log('pywebview.api ready with methods:', Object.keys(window.pywebview.api));
+        resolve();
+      } else {
+        console.log('Waiting for pywebview.api... Current state:', {
+          hasWindow: !!window.pywebview,
+          hasApi: !!(window.pywebview && window.pywebview.api),
+          apiKeys: window.pywebview && window.pywebview.api ? Object.keys(window.pywebview.api) : []
+        });
+        setTimeout(checkReady, 100);
+      }
+    };
+    checkReady();
+  });
+}
+
 window.api = {
+  /**
+   * Get audio file as data URL (for loading in webview)
+   */
+  getAudioFile: async (filePath) => {
+    await waitForPywebview();
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_audio_file) {
+      return await window.pywebview.api.get_audio_file(filePath);
+    }
+    console.error('pywebview.api.get_audio_file not available');
+    return null;
+  },
+
   /**
    * Reveal file/folder in file manager
    */
   revealPath: async (filePath) => {
-    if (window.pywebview) {
+    await waitForPywebview();
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.reveal_path) {
       await window.pywebview.api.reveal_path(filePath);
     }
   },

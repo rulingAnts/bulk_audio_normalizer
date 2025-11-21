@@ -97,7 +97,6 @@
           <div class="row">
             <input id="outputPath" type="text" placeholder="Choose output folder" readonly />
             <button id="btnOutput">Browse…</button>
-            <button id="btnClearOutput" title="Delete all contents of the output folder">Clear</button>
           </div>
           <div id="outputValidation" class="hint"></div>
         </div>
@@ -135,9 +134,12 @@
         <div class="actions-block">
           <div class="actions" style="display:flex; align-items:center; gap:8px;">
             <button id="btnStart" disabled>Start</button>
-            <span class="info-icon" aria-hidden="true" data-tip="To stop processing mid-run, close the window.">i</span>
+            <button id="btnPause" disabled style="display:none;">Pause</button>
+            <button id="btnResume" disabled style="display:none;">Resume</button>
+            <button id="btnCancel" disabled style="display:none;">Cancel</button>
+            <span class="info-icon" aria-hidden="true" data-tip="Pause will stop current files gracefully. Resume will continue where it left off. Cancel will stop and clear all output.">i</span>
           </div>
-          <div class="hint">To stop processing mid-run, close the window.</div>
+          <div class="hint">Pause to stop current files. Resume will pick up where it left off. Cancel clears output.</div>
         </div>
       </div>
     </section>
@@ -177,7 +179,7 @@
 
         <div class="adv-pair adv-peak" id="row-peakTargetDb">
           <label for="peakTargetDb">Peak target (dBFS)</label>
-          <input id="peakTargetDb" type="number" step="0.1" value="-9" />
+          <input id="peakTargetDb" type="number" step="0.1" value="-2" />
         </div>
 
         <div class="adv-pair adv-peak" id="row-peakOnlyBoost">

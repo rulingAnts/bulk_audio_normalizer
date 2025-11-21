@@ -290,7 +290,7 @@ def normalize_file(input_path: str, output_path: str, settings: Dict,
     target_lufs = settings.get('lufsTarget', -16)
     target_tp = settings.get('tpMargin', -1.0)
     limiter = settings.get('limiterLimit', 0.97)
-    peak_target_db = settings.get('peakTargetDb', -9)
+    peak_target_db = settings.get('peakTargetDb', -2)
     threads = settings.get('ffmpegThreads', 0)
     fast_normalize = settings.get('fastNormalize', False)
     verbose = settings.get('verboseLogs', False)

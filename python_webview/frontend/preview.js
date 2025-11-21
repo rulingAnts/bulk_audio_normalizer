@@ -45,7 +45,10 @@ function addCard({ original, preview, rel }) {
   `;
   previewList.appendChild(card);
 
-  const makeWS = (containerId, url) => {
+  const makeWS = async (containerId, filePath) => {
+    const container = document.getElementById(containerId);
+    const loadingDiv = container ? container.querySelector('.loading') : null;
+    
     const ws = WaveSurfer.create({
       container: '#' + containerId,
       backend: 'MediaElement',
@@ -58,43 +61,74 @@ function addCard({ original, preview, rel }) {
         WaveSurfer.regions.create({ dragSelection: true }),
       ],
     });
-    ws.load('file://' + url);
+    
+    // Hide loading indicator when ready
+    ws.on('ready', () => {
+      if (loadingDiv) {
+        loadingDiv.style.display = 'none';
+      }
+    });
+    
+    // Show error if loading fails
+    ws.on('error', (err) => {
+      console.error('WaveSurfer error:', err);
+      if (loadingDiv) {
+        loadingDiv.textContent = 'Error loading';
+        loadingDiv.style.color = '#d1242f';
+      }
+    });
+    
+    // Load file via Python API (returns data URL)
+    const dataUrl = await window.api.getAudioFile(filePath);
+    if (dataUrl) {
+      ws.load(dataUrl);
+    } else {
+      console.error('Failed to load audio file:', filePath);
+      if (loadingDiv) {
+        loadingDiv.textContent = 'Failed to load';
+        loadingDiv.style.color = '#d1242f';
+      }
+    }
+    
     return ws;
   };
 
-  const wsO = makeWS(originalId, original);
-  const wsP = makeWS(previewId, preview);
+  // Load waveforms asynchronously
+  (async () => {
+    const wsO = await makeWS(originalId, original);
+    const wsP = await makeWS(previewId, preview);
 
-  const btnRO = card.querySelector('[data-role="reveal-original"]');
-  const btnRP = card.querySelector('[data-role="reveal-preview"]');
-  btnRO.addEventListener('click', () => window.api.revealPath(original));
-  btnRP.addEventListener('click', () => window.api.revealPath(preview));
+    const btnRO = card.querySelector('[data-role="reveal-original"]');
+    const btnRP = card.querySelector('[data-role="reveal-preview"]');
+    btnRO.addEventListener('click', () => window.api.revealPath(original));
+    btnRP.addEventListener('click', () => window.api.revealPath(preview));
 
-  const getRegion = (ws) => {
-    const regions = Object.values(ws.regions.list || {});
-    return regions[regions.length - 1];
-  };
+    const getRegion = (ws) => {
+      const regions = Object.values(ws.regions.list || {});
+      return regions[regions.length - 1];
+    };
 
-  const bindControls = (prefix, ws) => {
-    const btnPlay = card.querySelector(`[data-role="play-${prefix}"]`);
-    const btnStop = card.querySelector(`[data-role="stop-${prefix}"]`);
-    const btnPlayRegion = card.querySelector(`[data-role="play-region-${prefix}"]`);
-    const chkLoop = card.querySelector(`[data-role="loop-${prefix}"]`);
-    btnPlay.addEventListener('click', () => ws.playPause());
-    btnStop.addEventListener('click', () => ws.stop());
-    btnPlayRegion.addEventListener('click', () => {
-      const r = getRegion(ws);
-      if (r) ws.play(r.start, r.end); else ws.play();
-    });
-    ws.on('region-in', (rgn) => { if (chkLoop.checked) rgn.playLoop(); });
-    ws.on('region-update-end', (rgn) => {
-      const all = Object.values(ws.regions.list || {});
-      for (const other of all) { if (other.id !== rgn.id) other.remove(); }
-    });
-  };
+    const bindControls = (prefix, ws) => {
+      const btnPlay = card.querySelector(`[data-role="play-${prefix}"]`);
+      const btnStop = card.querySelector(`[data-role="stop-${prefix}"]`);
+      const btnPlayRegion = card.querySelector(`[data-role="play-region-${prefix}"]`);
+      const chkLoop = card.querySelector(`[data-role="loop-${prefix}"]`);
+      btnPlay.addEventListener('click', () => ws.playPause());
+      btnStop.addEventListener('click', () => ws.stop());
+      btnPlayRegion.addEventListener('click', () => {
+        const r = getRegion(ws);
+        if (r) ws.play(r.start, r.end); else ws.play();
+      });
+      ws.on('region-in', (rgn) => { if (chkLoop.checked) rgn.playLoop(); });
+      ws.on('region-update-end', (rgn) => {
+        const all = Object.values(ws.regions.list || {});
+        for (const other of all) { if (other.id !== rgn.id) other.remove(); }
+      });
+    };
 
-  bindControls('o', wsO);
-  bindControls('p', wsP);
+    bindControls('o', wsO);
+    bindControls('p', wsP);
+  })();
 }
 
 window.api.onPreviewFileDone(({ original, preview, rel, tmpBase }) => {

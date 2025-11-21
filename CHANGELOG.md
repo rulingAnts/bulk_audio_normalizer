@@ -2,7 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.5.1] - 2025-11-07
+## [2.0.0] - 2025-11-21
+
+### Changed
+- **BREAKING:** Migrated from Electron to Python with pywebview for better subprocess management
+- Removed all Node.js/Electron dependencies and build infrastructure
+- Improved process control with proper pause/resume/cancel functionality
+- Settings now locked during processing to prevent mid-batch changes
+- Default peak target changed from -9 dBFS to -2 dBFS
+- Platform-specific FFmpeg binary organization (bin/macos/, bin/windows/, bin/linux/)
+- PyInstaller-based builds: macOS .app bundle and Windows portable .exe
+- Builds now only include platform-specific binaries (no cross-platform bloat)
+
+### Added
+- Pause processing capability with resume from where you left off
+- Cancel button with output folder cleanup
+- File tracking to prevent re-processing on resume
+- Batch verification after completion to ensure all files processed correctly
+- Preview window with A/B waveform comparison
+- Comprehensive build documentation (BUILD.md, BUILD_QUICK.md, BUILD_CHECKLIST.md, FIRST_TIME_BUILD.md)
+- Platform-specific build scripts (build_mac.sh, build_windows.bat)
+- Automated build verification scripts (test_build.sh, test_build.bat)
+
+### Fixed
+- Process tree cleanup now properly handles FFmpeg subprocess termination
+- Preview window can be closed and reopened multiple times
+- Progress tracking no longer shows incorrect file counts
+- Completion status correctly shows "All Done" instead of "Error" on success
+
+## [1.5.1] - 2025-11-07 (Electron - deprecated)
 
 ### Changed
 - Packaging: Windows build now sources `ffmpeg.exe` from a repo‑local zip (`build/win32-resources/ffmpeg-static.zip`) when cross‑building from macOS; no network calls required.

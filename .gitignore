@@ -1,11 +1,35 @@
-node_modules/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
 dist/
-out/
-.DS_Store
-release/
 build/
-!build/icons/
-!build/icons/**
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyInstaller
+python_webview/dist/
+python_webview/build/
+
+# FFmpeg binaries (large files, download separately)
+# Only platform-specific binaries are kept
+python_webview/bin/macos/ffmpeg
+python_webview/bin/macos/ffprobe
+python_webview/bin/windows/ffmpeg.exe
+python_webview/bin/windows/ffprobe.exe
+python_webview/bin/linux/ffmpeg
+python_webview/bin/linux/ffprobe
+
+# Distribution files
 *.dmg
 *.exe
 *.AppImage

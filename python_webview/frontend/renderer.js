@@ -6,8 +6,10 @@ const outputPath = $('#outputPath');
 const btnInput = $('#btnInput');
 const btnOutput = $('#btnOutput');
 const btnStart = $('#btnStart');
+const btnPause = $('#btnPause');
+const btnResume = $('#btnResume');
+const btnCancel = $('#btnCancel');
 // Stop button removed; keep references optional for backward compatibility
-const btnClearOutput = $('#btnClearOutput');
 const stopStatus = document.querySelector('#stopStatus');
 const outputValidation = $('#outputValidation');
 // Notice elements
@@ -95,6 +97,7 @@ const chkFastTrim = $('#fastTrim');
 let inputDir = '';
 let outputDir = '';
 let running = false;
+let paused = false;
 let stopping = false;
 let fileItems = new Map(); // id -> DOM refs
 let autoScrollFiles = true;
@@ -288,10 +291,19 @@ function setRunning(state) {
   running = state;
   const disableAll = running || stopping;
   btnStart.disabled = disableAll || !inputDir || !outputDir;
-  // Stop button removed
+  btnStart.style.display = (running || paused) ? 'none' : 'inline-block';
+  btnPause.style.display = (running && !paused) ? 'inline-block' : 'none';
+  btnPause.disabled = !running || paused;
+  btnResume.style.display = paused ? 'inline-block' : 'none';
+  btnResume.disabled = !paused;
+  btnCancel.style.display = (running || paused) ? 'inline-block' : 'none';
+  btnCancel.disabled = !running && !paused;
+  // Lock/unlock settings
+  setSettingsLocked(running || paused);
+  // Lock input/output selection
   btnInput.disabled = disableAll;
   btnOutput.disabled = disableAll;
-  btnClearOutput.disabled = disableAll || !outputDir;
+  // btnClearOutput was removed
   btnPreview.disabled = disableAll || !inputDir; // can preview without output
 }
 
@@ -391,6 +403,11 @@ profileSelect.addEventListener('change', () => {
 btnInput.addEventListener('click', async () => {
   const dir = await window.api.selectInputFolder(inputDir);
   if (dir) {
+    // Safety check: if output is already set, prevent selecting same folder
+    if (outputDir && dir === outputDir) {
+      alert('Input folder cannot be the same as output folder.');
+      return;
+    }
     inputDir = dir;
     inputPath.value = dir;
     // Changing input requires empty output before new start and clears UI
@@ -408,6 +425,11 @@ btnInput.addEventListener('click', async () => {
 btnOutput.addEventListener('click', async () => {
   const dir = await window.api.selectOutputFolder(outputDir);
   if (dir) {
+    // Safety check: prevent same folder for input and output
+    if (inputDir && dir === inputDir) {
+      alert('Output folder cannot be the same as input folder.');
+      return;
+    }
     outputDir = dir;
     outputPath.value = dir;
     // Selecting a new output enforces empty before (re)starting and clears UI
@@ -419,33 +441,31 @@ btnOutput.addEventListener('click', async () => {
   }
 });
 
-btnClearOutput.addEventListener('click', async () => {
-  if (!outputDir) return;
-  const ok = confirm(`Delete ALL contents of:\n${outputDir}\n\nThis cannot be undone.`);
-  if (!ok) return;
-  const res = await window.api.clearOutputFolder(outputDir);
-  if (res) {
-    outputValidation.textContent = 'Output folder is empty ✓';
-    outputValidation.style.color = '#2ea043';
-    // Only clear files on disk; do not reset UI state
-  } else {
-    outputValidation.textContent = 'Could not clear output folder.';
-    outputValidation.style.color = '#d1242f';
-  }
-  // After clearing, allow Start if input/output are set and not running
-  btnStart.disabled = (running || stopping) || !inputDir || !outputDir;
-});
-
 btnStart.addEventListener('click', async () => {
-  if (!inputDir || !outputDir) return;
+  console.log('='.repeat(80));
+  console.log('START BUTTON CLICKED');
+  console.log('  inputDir:', inputDir);
+  console.log('  outputDir:', outputDir);
+  
+  if (!inputDir || !outputDir) {
+    console.error('Missing input or output dir!');
+    return;
+  }
+  
+  console.log('Validating output folder is empty...');
   // Enforce empty output before starting; no resume support
   const empty = await window.api.validateOutputEmpty(outputDir);
+  console.log('  Output empty:', empty);
+  
   if (!empty) {
     outputValidation.textContent = 'Output folder must be empty.';
     outputValidation.style.color = '#d1242f';
+    console.error('Output folder not empty, aborting');
     return;
   }
+  
   // Clear UI for a fresh run
+  console.log('Clearing UI...');
   fileList.innerHTML = '';
   overallBar.style.width = '0%';
   overallPct.textContent = '0%';
@@ -460,10 +480,67 @@ btnStart.addEventListener('click', async () => {
 
   setRunning(true);
   const s = currentSettings();
+  console.log('Current settings:', s);
+  console.log('Calling window.api.startProcessing...');
+  
   const res = await window.api.startProcessing({ inputDir, outputDir, settings: s, concurrency: s.concurrency });
+  console.log('startProcessing returned:', res);
+  console.log('='.repeat(80));
+  
   if (!res.ok) {
     alert(res.error || 'Failed to start processing');
     setRunning(false);
+  }
+});
+
+btnPause.addEventListener('click', async () => {
+  console.log('Pause button clicked');
+  paused = true;
+  batchStatus.textContent = 'Pausing...';
+  const success = await window.api.pauseProcessing();
+  if (success) {
+    batchStatus.textContent = 'Paused';
+    setRunning(true);  // Keep running=true but show Resume button
+  } else {
+    paused = false;
+    batchStatus.textContent = 'Failed to pause';
+  }
+});
+
+btnResume.addEventListener('click', async () => {
+  console.log('Resume button clicked');
+  paused = false;
+  batchStatus.textContent = 'Resuming...';
+  const success = await window.api.resumeProcessing();
+  if (success) {
+    batchStatus.textContent = 'Processing...';
+    setRunning(true);  // Update UI to show Pause button
+  } else {
+    paused = true;
+    batchStatus.textContent = 'Failed to resume';
+  }
+});
+
+btnCancel.addEventListener('click', async () => {
+  console.log('Cancel button clicked');
+  if (!confirm('Cancel processing and clear all output files?')) {
+    return;
+  }
+  
+  batchStatus.textContent = 'Cancelling...';
+  const success = await window.api.cancelProcessing();
+  if (success) {
+    // Clear output folder
+    if (outputDir) {
+      await window.api.clearOutputFolder(outputDir);
+    }
+    // Reset UI
+    resetSessionAndUI();
+    batchStatus.textContent = 'Cancelled';
+    paused = false;
+    setRunning(false);
+  } else {
+    batchStatus.textContent = 'Failed to cancel';
   }
 });
 
@@ -643,23 +720,36 @@ window.api.onThrottleEvent?.(({ allowed, base, loadPct, freeMemPct, reason }) =>
 
 // Preview handling
 btnPreview.addEventListener('click', async () => {
+  console.log('Preview button clicked');
   if (!inputDir) {
     alert('Select an input folder first.');
     return;
   }
-  // Open a dedicated preview window
-  await window.api.openPreviewWindow();
-  // Keep inline container clean if visible
-  if (typeof previewList !== 'undefined') previewList.innerHTML = '';
-  if (typeof previewInfo !== 'undefined') previewInfo.textContent = 'Running preview…';
-  const s = currentSettings();
-  const count = Math.max(1, Math.min(50, Number(previewCount.value || 5)));
-  const res = await window.api.startPreview({ inputDir, settings: s, sampleSize: count, concurrency: Math.min(2, s.concurrency || 2) });
-  if (!res.ok) {
-    alert(res.error || 'Preview failed to start');
-    if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
-  } else {
-    if (typeof previewInfo !== 'undefined') previewInfo.textContent = `Preview folder: ${res.tmpBase}`;
+  try {
+    console.log('Calling openPreviewWindow...');
+    // Open a dedicated preview window
+    const openResult = await window.api.openPreviewWindow();
+    console.log('openPreviewWindow result:', openResult);
+    
+    // Keep inline container clean if visible
+    if (typeof previewList !== 'undefined') previewList.innerHTML = '';
+    if (typeof previewInfo !== 'undefined') previewInfo.textContent = 'Running preview…';
+    const s = currentSettings();
+    const count = Math.max(1, Math.min(50, Number(previewCount.value || 5)));
+    
+    console.log('Calling startPreview with:', { inputDir, sampleSize: count });
+    const res = await window.api.startPreview({ inputDir, settings: s, sampleSize: count, concurrency: Math.min(2, s.concurrency || 2) });
+    console.log('startPreview result:', res);
+    
+    if (!res.ok) {
+      alert(res.error || 'Preview failed to start');
+      if (typeof previewInfo !== 'undefined') previewInfo.textContent = '';
+    } else {
+      if (typeof previewInfo !== 'undefined') previewInfo.textContent = `Preview folder: ${res.tmpBase}`;
+    }
+  } catch (error) {
+    console.error('Preview error:', error);
+    alert('Preview error: ' + error.message);
   }
 });
 

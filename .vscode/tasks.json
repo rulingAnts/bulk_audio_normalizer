@@ -2,13 +2,73 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Build Windows (zip-provided ffmpeg)",
+			"label": "Run Python App",
 			"type": "shell",
-			"command": "npm run dist -- --win",
-			"args": [],
+			"command": "python3",
+			"args": ["main.py"],
+			"options": {
+				"cwd": "${workspaceFolder}/python_webview"
+			},
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "Build macOS App",
+			"type": "shell",
+			"command": "./build_mac.sh",
+			"options": {
+				"cwd": "${workspaceFolder}/python_webview"
+			},
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Build Windows Exe",
+			"type": "shell",
+			"command": "./build_windows.bat",
+			"options": {
+				"cwd": "${workspaceFolder}/python_webview"
+			},
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Create macOS DMG",
+			"type": "shell",
+			"command": "./create_dmg_mac.sh",
+			"options": {
+				"cwd": "${workspaceFolder}/python_webview"
+			},
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Setup FFmpeg",
+			"type": "shell",
+			"command": "python3",
+			"args": ["setup_ffmpeg.py"],
+			"options": {
+				"cwd": "${workspaceFolder}/python_webview"
+			},
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Test Build Configuration",
+			"type": "shell",
+			"command": "./test_build.sh",
+			"options": {
+				"cwd": "${workspaceFolder}/python_webview"
+			},
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

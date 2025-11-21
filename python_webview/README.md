@@ -1,6 +1,6 @@
 # Bulk Audio Normalizer - Python WebView Version
 
-This is a Python implementation of the Bulk Audio Normalizer using WebView for the UI and Python for the backend.
+This is a Python implementation of the Bulk Audio Normalizer using WebView for the UI and Python for the backend. It can be run as a Python script or built into standalone executables for Windows and macOS.
 
 ## Why Python?
 
@@ -12,14 +12,21 @@ Same features as the Electron version:
 - Peak dBFS or LUFS normalization
 - Flexible bit depth (16-bit, 24-bit, or preserve original)
 - Auto-trim silence with adjustable parameters
-- Batch processing with adaptive throttling
+- Batch processing with pause/resume capability
 - Preview mode with waveform visualization (A/B comparison)
+- Cancel processing with output cleanup
 - Responsive UI with progress tracking
 
 ## Requirements
 
+### Running from Source
 - Python 3.8 or higher
-- FFmpeg and FFprobe (will use ffmpeg-static binaries from the Electron version)
+- FFmpeg and FFprobe binaries
+
+### Building Executables
+- PyInstaller 6.0+
+- macOS: `create-dmg` (optional, for DMG creation)
+- Windows: No additional tools needed
 
 ## Installation
 
@@ -28,39 +35,80 @@ Same features as the Electron version:
 pip install -r requirements.txt
 ```
 
-2. Install FFmpeg binaries (if not already available from Electron version):
+2. Setup FFmpeg binaries:
 ```bash
-cd ..
-npm install
+python3 setup_ffmpeg.py  # macOS/Linux
+python setup_ffmpeg.py   # Windows
 ```
 
-## Running
+## Running from Source
 
 ```bash
-python main.py
+python3 main.py  # macOS/Linux
+python main.py   # Windows
 ```
 
-This will launch the WebView application with the UI from the Electron version, but with Python handling all backend processing.
+This will launch the WebView application with direct Python↔JavaScript communication (no HTTP server).
+
+## Building Executables
+
+### Quick Build
+
+**macOS:**
+```bash
+./build_mac.sh              # Creates .app bundle
+./create_dmg_mac.sh         # Creates DMG installer (optional)
+```
+
+**Windows:**
+```batch
+build_windows.bat           # Creates portable .exe
+```
+
+### Build Output
+
+- **macOS:** `dist/BulkAudioNormalizer.app` (application bundle)
+- **macOS DMG:** `dist/BulkAudioNormalizer.dmg` (installer)
+- **Windows:** `dist/BulkAudioNormalizer.exe` (portable executable)
+
+### Complete Build Documentation
+
+See [BUILD.md](BUILD.md) for comprehensive build instructions, troubleshooting, and distribution guidance.
+
+See [BUILD_QUICK.md](BUILD_QUICK.md) for a quick reference.
 
 ## Architecture
 
-- **main.py**: Entry point that starts the Flask backend and WebView window
-- **backend/api.py**: Flask API endpoints for file operations
+- **main.py**: Entry point with pywebview window and JS API bridge
 - **backend/audio_processor.py**: Core audio processing logic using FFmpeg
 - **backend/process_manager.py**: Subprocess management with proper cleanup
-- **frontend/**: HTML/CSS/JS UI (recycled from Electron version)
+- **backend/ffmpeg_paths.py**: FFmpeg binary detection (development and bundled)
+- **frontend/**: HTML/CSS/JS UI with direct Python API calls
+- **bulk_audio_normalizer.spec**: PyInstaller build configuration
 
 ## Differences from Electron Version
 
 1. **Backend**: Python instead of Node.js
 2. **UI Framework**: PyWebView instead of Electron
 3. **Subprocess Management**: Python's subprocess module with better process tree cleanup
-4. **IPC**: REST API instead of Electron IPC
-5. **Binary Resolution**: Uses FFmpeg/FFprobe from npm packages or system installation
+4. **IPC**: Direct JS API bridge instead of HTTP or Electron IPC
+5. **Binary Resolution**: Supports both development and PyInstaller bundled environments
+6. **Distribution**: Simpler deployment - no firewall prompts, smaller bundle size
 
-## Development
+## Development vs Production
 
-The UI files are copied from the Electron version's `src/renderer/` directory. Any UI changes should be made in the Electron version first, then copied here.
+The application automatically detects its environment:
+
+**Development (Python script):**
+- Looks for FFmpeg in `python_webview/bin/`
+- Falls back to system PATH or npm packages
+- Console output visible
+
+**Production (PyInstaller bundle):**
+- Looks for FFmpeg in bundled `bin/` directory
+- Falls back to system PATH
+- No console window (GUI only)
+- Self-contained executable
 
 ## License
 
