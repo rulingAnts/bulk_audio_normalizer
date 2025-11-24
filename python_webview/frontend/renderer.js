@@ -291,15 +291,16 @@ function setRunning(state) {
   running = state;
   const disableAll = running || stopping;
   btnStart.disabled = disableAll || !inputDir || !outputDir;
-  btnStart.style.display = (running || paused) ? 'none' : 'inline-block';
-  btnPause.style.display = (running && !paused) ? 'inline-block' : 'none';
-  btnPause.disabled = !running || paused;
-  btnResume.style.display = paused ? 'inline-block' : 'none';
-  btnResume.disabled = !paused;
-  btnCancel.style.display = (running || paused) ? 'inline-block' : 'none';
-  btnCancel.disabled = !running && !paused;
+  btnStart.style.display = running ? 'none' : 'inline-block';
+  // Pause/Resume/Cancel functionality temporarily disabled
+  btnPause.style.display = 'none';
+  btnPause.disabled = true;
+  btnResume.style.display = 'none';
+  btnResume.disabled = true;
+  btnCancel.style.display = 'none';
+  btnCancel.disabled = true;
   // Lock/unlock settings
-  setSettingsLocked(running || paused);
+  setSettingsLocked(running);
   // Lock input/output selection
   btnInput.disabled = disableAll;
   btnOutput.disabled = disableAll;

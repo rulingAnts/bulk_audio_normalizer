@@ -53,9 +53,8 @@ class API:
     
     def select_folder(self, title='Select Folder'):
         """Show folder selection dialog."""
-        from webview.window import FileDialog
         result = webview.windows[0].create_file_dialog(
-            FileDialog.FOLDER,
+            dialog_type=webview.FOLDER_DIALOG,
             directory='',
             allow_multiple=False
         )

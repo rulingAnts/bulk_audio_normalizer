@@ -30,6 +30,10 @@ All notable changes to this project will be documented in this file.
 - Progress tracking no longer shows incorrect file counts
 - Completion status correctly shows "All Done" instead of "Error" on success
 
+### Known Issues
+- **Pause/Resume functionality temporarily disabled:** Some users reported missing output files after using pause/resume. The feature has been disabled until the underlying issue can be identified and resolved. The batch processor will run to completion once started. To stop processing, close the application window.
+- **Verification of missing files needed:** In rare cases, some audio files may not be processed. The cause is under investigation and may be related to the disabled pause/resume functionality or concurrent processing edge cases. Check the output folder and debug log if you suspect files are missing.
+
 ## [1.5.1] - 2025-11-07 (Electron - deprecated)
 
 ### Changed
