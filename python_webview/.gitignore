@@ -38,3 +38,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# FFMPEG/FFPROBE binaries
+bin/

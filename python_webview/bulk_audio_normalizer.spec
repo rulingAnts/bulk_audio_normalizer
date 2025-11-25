@@ -23,20 +23,20 @@ for root, dirs, files in os.walk(frontend_dir):
         dst = os.path.dirname(src)
         frontend_datas.append((src, dst))
 
-# Collect FFmpeg binaries (platform-specific)
+# Collect FFmpeg binaries (platform-specific, preserving directory structure)
 ffmpeg_datas = []
 if is_windows:
-    # Use Windows binaries
+    # Use Windows binaries - keep them in bin/windows/
     if os.path.exists('bin/windows/ffmpeg.exe'):
-        ffmpeg_datas.append(('bin/windows/ffmpeg.exe', 'bin'))
+        ffmpeg_datas.append(('bin/windows/ffmpeg.exe', 'bin/windows'))
     if os.path.exists('bin/windows/ffprobe.exe'):
-        ffmpeg_datas.append(('bin/windows/ffprobe.exe', 'bin'))
+        ffmpeg_datas.append(('bin/windows/ffprobe.exe', 'bin/windows'))
 else:
-    # Use macOS/Linux binaries
+    # Use macOS/Linux binaries - keep them in bin/macos/
     if os.path.exists('bin/macos/ffmpeg'):
-        ffmpeg_datas.append(('bin/macos/ffmpeg', 'bin'))
+        ffmpeg_datas.append(('bin/macos/ffmpeg', 'bin/macos'))
     if os.path.exists('bin/macos/ffprobe'):
-        ffmpeg_datas.append(('bin/macos/ffprobe', 'bin'))
+        ffmpeg_datas.append(('bin/macos/ffprobe', 'bin/macos'))
 
 # Collect all backend modules
 backend_modules = collect_submodules('backend')
@@ -92,7 +92,7 @@ if is_windows:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon='icon.ico' if os.path.exists('icon.ico') else None,
+        icon='assets/icon.ico' if os.path.exists('assets/icon.ico') else None,
     )
 else:
     # macOS: app bundle (onedir)
@@ -127,8 +127,8 @@ else:
     
     app = BUNDLE(
         coll,
-        name='BulkAudioNormalizer.app',
-        icon='icon.icns' if os.path.exists('icon.icns') else None,
+        name='Bulk Audio Normalizer.app',
+        icon='assets/icon.icns' if os.path.exists('assets/icon.icns') else None,
         bundle_identifier='com.bulkaudionormalizer.app',
         info_plist={
             'NSPrincipleClass': 'NSApplication',

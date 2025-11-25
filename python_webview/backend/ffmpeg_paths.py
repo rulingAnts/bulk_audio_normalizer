@@ -45,10 +45,16 @@ def find_local_ffmpeg() -> str:
     base_path = get_base_path()
     bin_dir = base_path / 'bin'
     
+    logger.debug(f"find_local_ffmpeg: base_path={base_path}, bin_dir={bin_dir}")
+    logger.debug(f"find_local_ffmpeg: frozen={getattr(sys, 'frozen', False)}, has_MEIPASS={hasattr(sys, '_MEIPASS')}")
+    if hasattr(sys, '_MEIPASS'):
+        logger.debug(f"find_local_ffmpeg: _MEIPASS={sys._MEIPASS}")
+    
     # Use platform-specific directory
     if platform.system() == 'Darwin':
         platform_dir = bin_dir / 'macos'
         ffmpeg_path = platform_dir / 'ffmpeg'
+        logger.debug(f"find_local_ffmpeg: checking {ffmpeg_path}, exists={ffmpeg_path.exists()}")
         if ffmpeg_path.exists() and os.access(ffmpeg_path, os.X_OK):
             return str(ffmpeg_path)
     elif platform.system() == 'Windows':

@@ -708,7 +708,7 @@ def main():
     
     # Start webview
     logger.info("Starting WebView...")
-    webview.start(debug=True)  # Enable debug mode for console output
+    webview.start(debug=False)
     
     logger.info("Application closed")
 

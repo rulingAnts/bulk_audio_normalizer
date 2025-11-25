@@ -39,14 +39,14 @@ echo "🔨 Building application..."
 pyinstaller bulk_audio_normalizer.spec
 
 # Check if build was successful
-if [ ! -d "dist/BulkAudioNormalizer.app" ]; then
+if [ ! -d "dist/Bulk Audio Normalizer.app" ]; then
     echo "❌ Build failed - .app bundle not created"
     exit 1
 fi
 
 echo "✅ Build complete!"
 echo ""
-echo "Application built at: dist/BulkAudioNormalizer.app"
+echo "Application built at: dist/Bulk Audio Normalizer.app"
 echo ""
 echo "To create a DMG:"
 echo "  1. Install create-dmg: brew install create-dmg"
