@@ -44,6 +44,27 @@ processing_state = {
 }
 
 
+def js_escape_path(path: str) -> str:
+    """
+    Escape a file path for safe use in JavaScript strings.
+    Converts backslashes to forward slashes (works on both Windows and macOS)
+    and escapes quotes.
+    
+    Args:
+        path: File path to escape
+        
+    Returns:
+        Escaped path safe for JavaScript string literals
+    """
+    if not path:
+        return ''
+    # Convert backslashes to forward slashes (works on Windows and macOS)
+    path = path.replace('\\', '/')
+    # Escape single and double quotes
+    path = path.replace("'", "\\'").replace('"', '\\"')
+    return path
+
+
 class API:
     """
     API class exposed to JavaScript via pywebview.
@@ -523,10 +544,10 @@ class API:
                     # Send completion to preview window
                     if preview_window:
                         logger.info(f"Sending preview file update to window...")
-                        original = file_path.replace("'", "\\'").replace('"', '\\"')
-                        preview = out_path.replace("'", "\\'").replace('"', '\\"')
-                        rel = rel_path.replace("'", "\\'").replace('"', '\\"')
-                        tmp = tmp_base.replace("'", "\\'").replace('"', '\\"')
+                        original = js_escape_path(file_path)
+                        preview = js_escape_path(out_path)
+                        rel = js_escape_path(rel_path)
+                        tmp = js_escape_path(tmp_base)
                         try:
                             preview_window.evaluate_js(
                                 f"window.triggerPreviewFile('{original}', '{preview}', '{rel}', '{tmp}')"
@@ -542,7 +563,7 @@ class API:
                     
             # Send completion
             if preview_window:
-                tmp = tmp_base.replace("'", "\\'").replace('"', '\\"')
+                tmp = js_escape_path(tmp_base)
                 try:
                     preview_window.evaluate_js(
                         f"window.triggerPreviewDone({len(files)}, '{tmp}')"

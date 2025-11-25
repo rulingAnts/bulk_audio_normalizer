@@ -39,7 +39,7 @@ echo Building application...
 pyinstaller bulk_audio_normalizer.spec
 
 REM Check if build was successful
-if not exist "dist\BulkAudioNormalizer.exe" (
+if not exist "dist\Bulk Audio Normalizer.exe" (
     echo Build failed - .exe not created
     exit /b 1
 )
@@ -49,8 +49,8 @@ echo ========================================
 echo Build complete!
 echo ========================================
 echo.
-echo Executable location: dist\BulkAudioNormalizer.exe
+echo Executable location: dist\Bulk Audio Normalizer.exe
 echo.
 echo To test the application:
-echo   dist\BulkAudioNormalizer.exe
+echo   "dist\Bulk Audio Normalizer.exe"
 echo.

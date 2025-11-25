@@ -79,7 +79,7 @@ if is_windows:
         a.zipfiles,
         a.datas,
         [],
-        name='BulkAudioNormalizer',
+        name='Bulk Audio Normalizer',
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -101,7 +101,7 @@ else:
         a.scripts,
         [],
         exclude_binaries=True,
-        name='BulkAudioNormalizer',
+        name='Bulk Audio Normalizer',
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
@@ -122,7 +122,7 @@ else:
         strip=False,
         upx=True,
         upx_exclude=[],
-        name='BulkAudioNormalizer',
+        name='Bulk Audio Normalizer',
     )
     
     app = BUNDLE(
