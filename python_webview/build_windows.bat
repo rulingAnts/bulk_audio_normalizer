@@ -29,17 +29,17 @@ if not exist "bin\windows\ffprobe.exe" (
     exit /b 1
 )
 
-REM Clean previous builds
-echo Cleaning previous builds...
-if exist "build" rmdir /s /q build
-if exist "dist" rmdir /s /q dist
+REM Clean previous Windows builds only
+echo Cleaning previous Windows builds...
+if exist "build\windows" rmdir /s /q build\windows
+if exist "dist\windows" rmdir /s /q dist\windows
 
 REM Build with PyInstaller
 echo Building application...
 pyinstaller bulk_audio_normalizer.spec
 
 REM Check if build was successful
-if not exist "dist\Bulk Audio Normalizer.exe" (
+if not exist "dist\windows\Bulk Audio Normalizer.exe" (
     echo Build failed - .exe not created
     exit /b 1
 )
@@ -49,8 +49,8 @@ echo ========================================
 echo Build complete!
 echo ========================================
 echo.
-echo Executable location: dist\Bulk Audio Normalizer.exe
+echo Executable location: dist\windows\Bulk Audio Normalizer.exeizer.exe
 echo.
 echo To test the application:
-echo   "dist\Bulk Audio Normalizer.exe"
+echo   "dist\windows\Bulk Audio Normalizer.exe"
 echo.

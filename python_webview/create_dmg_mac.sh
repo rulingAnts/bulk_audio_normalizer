@@ -7,8 +7,8 @@ set -e
 echo "💿 Creating DMG installer for macOS..."
 
 # Check if .app bundle exists
-if [ ! -d "dist/Bulk Audio Normalizer.app" ]; then
-    echo "❌ Error: dist/Bulk Audio Normalizer.app not found"
+if [ ! -d "dist/macos/Bulk Audio Normalizer.app" ]; then
+    echo "❌ Error: dist/macos/Bulk Audio Normalizer.app not found"
     echo "Run ./build_mac.sh first"
     exit 1
 fi
@@ -21,7 +21,7 @@ if ! command -v create-dmg &> /dev/null; then
 fi
 
 # Clean previous DMG
-rm -f dist/BulkAudioNormalizer.dmg
+rm -f "dist/macos/Bulk Audio Normalizer.dmg"
 
 # Create DMG
 echo "🔨 Creating DMG..."
@@ -34,16 +34,16 @@ create-dmg \
   --icon "Bulk Audio Normalizer.app" 175 120 \
   --hide-extension "Bulk Audio Normalizer.app" \
   --app-drop-link 425 120 \
-  "dist/Bulk Audio Normalizer.dmg" \
-  "dist/Bulk Audio Normalizer.app" \
+  "dist/macos/Bulk Audio Normalizer.dmg" \
+  "dist/macos/Bulk Audio Normalizer.app" \
   || true  # create-dmg returns non-zero even on success sometimes
 
 # Check if DMG was created
-if [ -f "dist/Bulk Audio Normalizer.dmg" ]; then
+if [ -f "dist/macos/Bulk Audio Normalizer.dmg" ]; then
     echo "✅ DMG created successfully!"
     echo ""
-    echo "DMG location: dist/Bulk Audio Normalizer.dmg"
-    echo "Size: $(du -h "dist/Bulk Audio Normalizer.dmg" | cut -f1)"
+    echo "DMG location: dist/macos/Bulk Audio Normalizer.dmg"
+    echo "Size: $(du -h "dist/macos/Bulk Audio Normalizer.dmg" | cut -f1)"
 else
     echo "❌ DMG creation failed"
     exit 1
