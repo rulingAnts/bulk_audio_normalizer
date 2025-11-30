@@ -135,8 +135,8 @@ else:
             'NSHighResolutionCapable': 'True',
             'CFBundleName': 'Bulk Audio Normalizer',
             'CFBundleDisplayName': 'Bulk Audio Normalizer',
-            'CFBundleVersion': '2.0.0',
-            'CFBundleShortVersionString': '2.0.0',
+            'CFBundleVersion': '2.0.1',
+            'CFBundleShortVersionString': '2.0.1',
             'NSRequiresAquaSystemAppearance': 'False',
         },
     )

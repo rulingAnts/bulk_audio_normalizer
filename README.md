@@ -6,7 +6,7 @@ Python application to batch-process WAV files for linguistics and fieldwork. Sup
 
 > **🌐 User Documentation:** Visit the [project website](https://rulingAnts.github.io/bulk_audio_normalizer/) for screenshots, quick start guide, and direct download buttons.
 
-> **Note:** Version 2.0.0 represents a complete rewrite from v1.x. The application is now stable, efficient, and production-ready, fixing the resource-intensive issues and frequent crashes that made v1.x unusable.
+> **Note:** Version 2.0.1 represents a complete rewrite from v1.x. The application is now stable, efficient, and production-ready, fixing the resource-intensive issues and frequent crashes that made v1.x unusable.
 
 ## What it does
 
