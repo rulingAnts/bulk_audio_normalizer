@@ -11,10 +11,24 @@ if not exist "main.py" (
 )
 
 REM Check if PyInstaller is installed
-pyinstaller --version >nul 2>&1
-if errorlevel 1 (
-    echo PyInstaller not found. Installing...
-    pip install pyinstaller
+REM Prefer the project's virtualenv Python (if present) and use it to run
+REM PyInstaller via "python -m PyInstaller" so we don't rely on pyinstaller
+REM being on the global PATH.
+set "VENV_PY=%~dp0..\.venv\Scripts\python.exe"
+if exist %VENV_PY% (
+    echo Using virtualenv Python at %VENV_PY%
+    "%VENV_PY%" -m PyInstaller --version >nul 2>&1
+    if errorlevel 1 (
+        echo PyInstaller not found in venv. Installing into venv...
+        "%VENV_PY%" -m pip install --upgrade pyinstaller
+    )
+) else (
+    echo No project venv found. Falling back to system Python/pyinstaller.
+    pyinstaller --version >nul 2>&1
+    if errorlevel 1 (
+        echo PyInstaller not found. Installing to user site-packages...
+        python -m pip install --user --upgrade pyinstaller
+    )
 )
 
 REM Check if FFmpeg binaries exist
@@ -36,7 +50,13 @@ if exist "dist\windows" rmdir /s /q dist\windows
 
 REM Build with PyInstaller
 echo Building application...
-pyinstaller --distpath dist\windows --workpath build\windows bulk_audio_normalizer.spec
+if exist %VENV_PY% (
+    echo Building application with venv Python...
+    "%VENV_PY%" -m PyInstaller --distpath dist\windows --workpath build\windows bulk_audio_normalizer.spec
+) else (
+    echo Building application with system pyinstaller...
+    pyinstaller --distpath dist\windows --workpath build\windows bulk_audio_normalizer.spec
+)
 
 REM Check if build was successful
 if not exist "dist\windows\Bulk Audio Normalizer.exe" (
