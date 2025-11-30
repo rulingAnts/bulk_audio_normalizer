@@ -101,17 +101,8 @@
           <div id="outputValidation" class="hint"></div>
         </div>
         <div class="picker">
-          <label>Processing profile</label>
-          <div class="row">
-            <select id="profileSelect">
-              <option value="balanced">Balanced (good speed, safe)</option>
-              <option value="fast">Fastest (lots of files)</option>
-              <option value="quality">Highest quality/safety</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-          <div id="profileDesc" class="hint"></div>
-          <div class="row" style="margin-top:6px; align-items:center; gap:8px;">
+          <label>Normalization options</label>
+          <div class="row" style="align-items:center; gap:8px;">
             <label for="normMode" style="margin:0; font-weight:600;">Normalization intent</label>
             <select id="normMode" title="Participatory Analysis/Human Ears: normalize to −16 LUFS with a safety limiter (consistent listening). Acoustic Analysis/Language Documentation: set peak level (dBFS) to keep headroom (−12 to −6 dBFS), suitable for tools like Praat; LUFS isn’t typically specified for linguistics field work.">
               <option value="peak" selected>Acoustic Analysis / Language Documentation (peak dBFS)</option>
@@ -129,7 +120,15 @@
             </select>
             <span class="info-icon" aria-hidden="true" data-tip="Some archives prefer 24‑bit WAVs; field tools like Dekereke and FieldWorks may require 16‑bit. Many phonologists find 16‑bit sufficient for vowel formants and tone, with much smaller files and lower CPU/RAM load. 'Original (no limit)' keeps the source bit depth and can increase processing load and storage—generally not required by academic archives.">i</span>
           </div>
-          <div class="hint">Default to 16‑bit unless your archive requires 24‑bit. “Original” preserves float/bit depth for specialist analysis.</div>
+          <div class="hint">Default to 16‑bit unless your archive requires 24‑bit. "Original" preserves float/bit depth for specialist analysis.</div>
+          <div class="row" style="margin-top:12px; align-items:center; gap:8px;">
+            <label for="autoTrim" style="margin:0; font-weight:600;">
+              <input id="autoTrimMain" type="checkbox" style="margin-right:4px;" />
+              Auto-trim leading/trailing silence
+            </label>
+            <span class="info-icon" aria-hidden="true" data-tip="Remove silence at the start and end of files. Advanced trimming options available below.">i</span>
+          </div>
+          <div class="hint">Removes leading/trailing silence with conservative defaults. Configure trim settings in Advanced options.</div>
         </div>
         <div class="actions-block">
           <div class="actions" style="display:flex; align-items:center; gap:8px;">
@@ -211,10 +210,9 @@
   <input id="ffmpegThreads" type="number" min="0" placeholder="auto" title="CPU threads used per file (0 = auto)" />
         
     <div class="group-title" style="grid-column: 1 / -1; height: 8px;"></div>
-    <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Trimming</div>
+    <div class="group-title" style="grid-column: 1 / -1; font-weight: 600; margin: 4px 0;">Trimming Options</div>
         <label for="autoTrim">Auto-trim leading/trailing silence</label>
-        <input id="autoTrim" type="checkbox" checked />
-
+        <input id="autoTrim" type="checkbox" />
   <label for="trimPadMs">Keep padding each side (ms)</label>
   <input id="trimPadMs" type="number" min="0" value="800" />
 

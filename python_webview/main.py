@@ -729,7 +729,7 @@ def main():
     
     # Start webview
     logger.info("Starting WebView...")
-    webview.start(debug=False)
+    webview.start(debug=True)
     
     logger.info("Application closed")
 

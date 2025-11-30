@@ -22,8 +22,6 @@ const btnNoticePlusBrief = $('#btnNoticePlusBrief');
 const btnNoticeMinusBrief = $('#btnNoticeMinusBrief');
 const btnNoticeMinusFull = $('#btnNoticeMinusFull');
 const btnNoticeCollapseMin2 = $('#btnNoticeCollapseMin2');
-const profileSelect = $('#profileSelect');
-const profileDesc = $('#profileDesc');
 const bitDepthSelect = $('#bitDepth');
 const normModeSelect = $('#normMode');
 const overallBar = $('#overallBar');
@@ -83,6 +81,7 @@ const inTP = $('#tpMargin');
 const inLimiter = $('#limiterLimit');
 const inConc = $('#concurrency');
 const chkAutoTrim = $('#autoTrim');
+const chkAutoTrimMain = $('#autoTrimMain');
 const inTrimPadMs = $('#trimPadMs');
 const inTrimThresholdDb = $('#trimThresholdDb');
 const inTrimMinDurMs = $('#trimMinDurationMs');
@@ -106,7 +105,7 @@ let autoScrollFiles = true;
 
 function setSettingsLocked(locked) {
   const ctrls = [
-    profileSelect, bitDepthSelect, normModeSelect, inLufs, inPeakTarget, chkPeakOnlyBoost, inTP, inLimiter,
+    bitDepthSelect, normModeSelect, inLufs, inPeakTarget, chkPeakOnlyBoost, inTP, inLimiter,
     inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative,
     chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim
   ];
@@ -157,9 +156,8 @@ function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) {
-      // No saved settings: set smart defaults
-      const cores = navigator.hardwareConcurrency || 4;
-      inConc.value = Math.max(1, cores - 1);
+      // No saved settings: apply high quality defaults
+      applyDefaultSettings();
       if (normModeSelect) normModeSelect.value = 'peak';
       return;
     }
@@ -168,7 +166,10 @@ function loadSettings() {
     if (s.tpMargin != null) inTP.value = s.tpMargin;
     if (s.limiterLimit != null) inLimiter.value = s.limiterLimit;
     if (s.concurrency != null) inConc.value = s.concurrency;
-    if (typeof s.autoTrim === 'boolean') chkAutoTrim.checked = s.autoTrim;
+    if (typeof s.autoTrim === 'boolean') {
+      chkAutoTrim.checked = s.autoTrim;
+      if (chkAutoTrimMain) chkAutoTrimMain.checked = s.autoTrim;
+    }
     if (s.trimPadMs != null) inTrimPadMs.value = s.trimPadMs;
     if (s.trimThresholdDb != null) inTrimThresholdDb.value = s.trimThresholdDb;
     if (s.trimMinDurationMs != null) inTrimMinDurMs.value = s.trimMinDurationMs;
@@ -235,56 +236,23 @@ function recommendedConcurrency() {
   return Math.max(1, cores - 1);
 }
 
-function applyPreset(name) {
+// Apply high quality defaults (removed profile system)
+function applyDefaultSettings() {
   const recConc = recommendedConcurrency();
-  let desc = '';
-  if (name === 'fast') {
-    // Fastest processing
-    chkAutoTrim.checked = false; // absolute fastest; user can switch to Balanced for trimming
-    chkFastTrim.checked = true;
-    chkFastNormalize.checked = true;
-    inTrimThresholdDb.value = '-35';
-    inTrimPadMs.value = '400';
-    inConc.value = recConc;
-    inFfmpegThreads.value = '1';
-    desc = 'Fastest: focus on speed. Trimming off; single-pass normalize; many files at once.';
-  } else if (name === 'balanced') {
-    chkAutoTrim.checked = true;
-    chkFastTrim.checked = true;
-    chkFastNormalize.checked = false;
-    inTrimThresholdDb.value = '-45';
-    inTrimPadMs.value = '800';
-    inConc.value = recConc;
-    inFfmpegThreads.value = '1';
-    desc = 'Balanced: good speed and safe defaults. Fast trim on; precise 2-pass normalize.';
-  } else if (name === 'quality') {
-    chkAutoTrim.checked = true;
-    chkFastTrim.checked = false; // use FFmpeg detect
-    chkTrimHPF.checked = true;
-    chkTrimConservative.checked = true;
-    chkFastNormalize.checked = false;
-    inTrimThresholdDb.value = '-50';
-    inTrimPadMs.value = '800';
-    inConc.value = String(Math.max(1, Math.floor(recommendedConcurrency() / 2)));
-    inFfmpegThreads.value = '0'; // auto
-    desc = 'Highest quality/safety: most cautious trimming and full accuracy; CPU/RAM heavy. Adaptive throttling will protect your system.';
-  } else {
-    desc = 'Custom: your own combination. Open Advanced… to tweak.';
-  }
-  profileDesc.textContent = desc;
+  // High quality defaults
+  if (chkAutoTrim) chkAutoTrim.checked = false; // Default to NO auto-trim
+  if (chkAutoTrimMain) chkAutoTrimMain.checked = false;
+  if (chkFastTrim) chkFastTrim.checked = false; // Use FFmpeg detect (high quality)
+  if (chkTrimHPF) chkTrimHPF.checked = true;
+  if (chkTrimConservative) chkTrimConservative.checked = true;
+  if (chkFastNormalize) chkFastNormalize.checked = false; // Use 2-pass (high quality)
+  if (inTrimThresholdDb) inTrimThresholdDb.value = '-50';
+  if (inTrimPadMs) inTrimPadMs.value = '800';
+  if (inConc) inConc.value = String(Math.max(1, Math.floor(recConc / 2)));
+  if (inFfmpegThreads) inFfmpegThreads.value = '0'; // auto
+  if (inPeakTarget) inPeakTarget.value = '-2'; // Acoustic analysis default
+  if (inLufs) inLufs.value = '-16'; // Human ears default
   saveSettings();
-}
-
-function describePresetForCurrent() {
-  const s = currentSettings();
-  const recConc = recommendedConcurrency();
-  const isFast = !s.autoTrim && s.fastTrim && s.fastNormalize && Number(s.concurrency) === recConc && Number(s.ffmpegThreads) === 1;
-  const isBalanced = s.autoTrim && s.fastTrim && !s.fastNormalize && Number(s.concurrency) === recConc && Number(s.ffmpegThreads) === 1;
-  const isQuality = s.autoTrim && !s.fastTrim && s.trimHPF && s.trimConservative && !s.fastNormalize && Number(s.concurrency) === Math.max(1, Math.floor(recConc / 2)) && Number(s.ffmpegThreads) === 0;
-  if (isFast) return 'fast';
-  if (isBalanced) return 'balanced';
-  if (isQuality) return 'quality';
-  return 'custom';
 }
 
 function setRunning(state) {
@@ -309,16 +277,27 @@ function setRunning(state) {
 }
 
 // Persist settings on change
-[inLufs, inPeakTarget, chkPeakOnlyBoost, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim, bitDepthSelect, normModeSelect].forEach((el) => el.addEventListener('change', () => {
+[inLufs, inPeakTarget, chkPeakOnlyBoost, inTP, inLimiter, inConc, chkAutoTrim, inTrimPadMs, inTrimThresholdDb, inTrimMinDurMs, inTrimMinFileMs, chkTrimConservative, chkTrimHPF, chkVerbose, chkFastNormalize, inFfmpegThreads, chkFastTrim, bitDepthSelect, normModeSelect].filter(el => el).forEach((el) => el.addEventListener('change', () => {
   saveSettings();
-  const p = describePresetForCurrent();
-  profileSelect.value = p;
-  if (p === 'fast') profileDesc.textContent = 'Fastest: focus on speed. Trimming off; single-pass normalize; many files at once.';
-  else if (p === 'balanced') profileDesc.textContent = 'Balanced: good speed and safe defaults. Fast trim on; precise 2-pass normalize.';
-  else if (p === 'quality') profileDesc.textContent = 'Highest quality/safety: most cautious trimming and full accuracy; slightly slower.';
-  else profileDesc.textContent = 'Custom: your own combination. Open Advanced… to tweak.';
   updateAdvancedVisibility();
 }));
+
+// Sync auto-trim main checkbox with advanced checkbox
+if (chkAutoTrimMain) {
+  chkAutoTrimMain.addEventListener('change', () => {
+    chkAutoTrim.checked = chkAutoTrimMain.checked;
+    saveSettings();
+    updateAdvancedVisibility();
+  });
+}
+if (chkAutoTrim) {
+  chkAutoTrim.addEventListener('change', () => {
+    if (chkAutoTrimMain) chkAutoTrimMain.checked = chkAutoTrim.checked;
+    saveSettings();
+    updateAdvancedVisibility();
+  });
+}
+
 loadSettings();
 updateAdvancedVisibility();
 
@@ -393,13 +372,6 @@ btnNoticeCollapseMin2?.addEventListener('click', () => setNoticeState('min'));
 
 // Initialize notice state (default brief)
 setNoticeState(localStorage.getItem(NOTICE_STATE_KEY) || 'brief');
-
-// Initialize preset selector based on current settings
-profileSelect.value = describePresetForCurrent();
-if (profileSelect.value === 'custom') profileDesc.textContent = 'Custom: your own combination. Open Advanced… to tweak.';
-profileSelect.addEventListener('change', () => {
-  applyPreset(profileSelect.value);
-});
 
 btnInput.addEventListener('click', async () => {
   const dir = await window.api.selectInputFolder(inputDir);
