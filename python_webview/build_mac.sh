@@ -36,7 +36,7 @@ rm -rf build/macos dist/macos
 
 # Build with PyInstaller
 echo "🔨 Building application..."
-pyinstaller bulk_audio_normalizer.spec
+pyinstaller --distpath dist/macos --workpath build/macos bulk_audio_normalizer.spec
 
 # Check if build was successful
 if [ ! -d "dist/macos/Bulk Audio Normalizer.app" ]; then

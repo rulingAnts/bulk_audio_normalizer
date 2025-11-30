@@ -36,7 +36,7 @@ if exist "dist\windows" rmdir /s /q dist\windows
 
 REM Build with PyInstaller
 echo Building application...
-pyinstaller bulk_audio_normalizer.spec
+pyinstaller --distpath dist\windows --workpath build\windows bulk_audio_normalizer.spec
 
 REM Check if build was successful
 if not exist "dist\windows\Bulk Audio Normalizer.exe" (

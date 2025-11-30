@@ -14,14 +14,6 @@ block_cipher = None
 is_windows = sys.platform.startswith('win')
 is_macos = sys.platform == 'darwin'
 
-# Platform-specific output directories
-if is_windows:
-    DISTPATH = 'dist/windows'
-    BUILDPATH = 'build/windows'
-else:
-    DISTPATH = 'dist/macos'
-    BUILDPATH = 'build/macos'
-
 # Collect all frontend files
 frontend_datas = []
 frontend_dir = 'frontend'
@@ -75,10 +67,6 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
-
-# Set platform-specific paths
-a.distpath = DISTPATH
-a.buildpath = BUILDPATH
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
