@@ -49,7 +49,7 @@ echo ========================================
 echo Build complete!
 echo ========================================
 echo.
-echo Executable location: dist\windows\Bulk Audio Normalizer.exeizer.exe
+echo Executable location: dist\windows\Bulk Audio Normalizer.exe
 echo.
 echo To test the application:
 echo   "dist\windows\Bulk Audio Normalizer.exe"
