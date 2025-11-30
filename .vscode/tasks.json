@@ -30,7 +30,7 @@
 		{
 			"label": "Build Windows Exe",
 			"type": "shell",
-			"command": "./build_windows.bat",
+			"command": "build_windows.bat",
 			"options": {
 				"cwd": "${workspaceFolder}/python_webview"
 			},
