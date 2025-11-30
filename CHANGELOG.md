@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.0] - 2025-11-21
+## [2.0.0] - 2025-11-30
+
+### 🎉 Major Stability Release
+
+This version represents a **complete rewrite** from v1.x that makes the application actually usable in production.
+
+**Before (v1.x):** Extremely resource-intensive, error-prone, and frequently crashed during processing.
+
+**Now (v2.0):** Complete architectural overhaul resulting in a stable, efficient, and reliable audio normalization tool.
 
 ### Changed
 - **BREAKING:** Migrated from Electron to Python with pywebview for better subprocess management
@@ -13,6 +21,9 @@ All notable changes to this project will be documented in this file.
 - Platform-specific FFmpeg binary organization (bin/macos/, bin/windows/, bin/linux/)
 - PyInstaller-based builds: macOS .app bundle and Windows portable .exe
 - Builds now only include platform-specific binaries (no cross-platform bloat)
+- **Platform-specific build directories:** macOS builds to `dist/macos/`, Windows to `dist/windows/`
+- Dramatically reduced memory and CPU consumption
+- Stable processing with no crashes during batch operations
 
 ### Added
 - Pause processing capability with resume from where you left off
@@ -23,12 +34,17 @@ All notable changes to this project will be documented in this file.
 - Comprehensive build documentation (BUILD.md, BUILD_QUICK.md, BUILD_CHECKLIST.md, FIRST_TIME_BUILD.md)
 - Platform-specific build scripts (build_mac.sh, build_windows.bat)
 - Automated build verification scripts (test_build.sh, test_build.bat)
+- Windows build guide (WINDOWS_BUILD_GUIDE.md) for cross-platform development
+- Professional app naming with spaces ("Bulk Audio Normalizer")
 
 ### Fixed
 - Process tree cleanup now properly handles FFmpeg subprocess termination
 - Preview window can be closed and reopened multiple times
 - Progress tracking no longer shows incorrect file counts
 - Completion status correctly shows "All Done" instead of "Error" on success
+- Bundled FFmpeg binaries now properly used instead of system PATH
+- Icon management for both macOS (.icns) and Windows (.ico)
+- Debug mode disabled for production builds
 
 ### Known Issues
 - **Pause/Resume functionality temporarily disabled:** Some users reported missing output files after using pause/resume. The feature has been disabled until the underlying issue can be identified and resolved. The batch processor will run to completion once started. To stop processing, close the application window.
