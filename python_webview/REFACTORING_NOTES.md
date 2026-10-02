@@ -90,13 +90,16 @@ if (window.pywebview) {
 
 ## Update Mechanism
 
-Python workers push updates to frontend via `evaluate_js()`:
+Python workers push updates to the frontend through `js_call()` in `main.py`, which wraps
+`evaluate_js()` and JSON-encodes every argument:
 
 ```python
-main_window.evaluate_js(
-    f"window.triggerPhaseEvent('{job_id}', '{phase}', '{status}', {pct})"
-)
+js_call(main_window, 'triggerPhaseEvent', job_id, phase, status, pct)
 ```
+
+Never build these calls by pasting values into a quoted JavaScript string. A file name with an
+apostrophe ("Don't") or a Windows path with a backslash sequence breaks the string, and that stopped
+whole batches in v2.0.1 (issue #2).
 
 Frontend receives via global trigger functions:
 ```javascript
