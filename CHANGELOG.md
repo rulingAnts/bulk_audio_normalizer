@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2026-10-02
+
+### Fixed
+- Files whose names contain an apostrophe (e.g. "Don't") stopped the batch with an error ([#2](https://github.com/rulingAnts/bulk_audio_normalizer/issues/2))
+- Windows output paths with backslash sequences (e.g. `\x`, `\u`) garbled the log or stopped the batch
+- A batch that stopped on an error no longer reports "Completed"; the error is shown, the status stays "Error", and the controls unlock
+
 ## [2.0.1] - 2025-11-30
 
 ### Changed

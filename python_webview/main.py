@@ -7,6 +7,7 @@ Uses pywebview's JS API bridge for direct Python<->JavaScript communication.
 """
 import os
 import sys
+import json
 import logging
 import threading
 import tempfile
@@ -63,6 +64,30 @@ def js_escape_path(path: str) -> str:
     # Escape single and double quotes
     path = path.replace("'", "\\'").replace('"', '\\"')
     return path
+
+
+def js_call(window, fn: str, *args) -> None:
+    """
+    Call ``window.<fn>(*args)`` in a webview window.
+
+    Each argument is encoded with json.dumps, so any Python str, int, float,
+    bool or None arrives in JavaScript with the same value and type. File
+    names with quotes, Windows paths with backslashes, newlines, U+2028 and
+    emoji are all safe; the default ensure_ascii=True also keeps the whole
+    script ASCII. Never build these calls by pasting values into a quoted JS
+    string by hand: an apostrophe ("Don't") or a backslash sequence
+    (C:\\x...) breaks the literal (issue #2).
+
+    A failed UI update is logged and swallowed: it must never stop audio
+    processing.
+    """
+    if window is None:
+        return
+    try:
+        script = f"window.{fn}({', '.join(json.dumps(a) for a in args)})"
+        window.evaluate_js(script)
+    except Exception as e:
+        logger.warning(f"UI update {fn} failed: {e}")
 
 
 class API:
@@ -314,8 +339,7 @@ class API:
             # Check if there are files to process
             if not wav_files:
                 logger.warning("No files to process (all may have been processed already)")
-                if main_window:
-                    main_window.evaluate_js("window.triggerAllDone()")
+                js_call(main_window, 'triggerAllDone')
                 return
             
             # Process each file
@@ -325,18 +349,19 @@ class API:
                 processing_state['total_files'] = total
             
             completed = len(processing_state['processed_files'])
-            
+            # Set when a file fails: the user has already been sent
+            # triggerError, so the batch must not then report "Completed".
+            failed = False
+
             # Trigger batch start event
-            if main_window:
-                logger.info(f"Triggering batch start event with {total} files (starting at {completed})")
-                main_window.evaluate_js(f"window.triggerBatchStart({total})")
-            
+            logger.info(f"Triggering batch start event with {total} files (starting at {completed})")
+            js_call(main_window, 'triggerBatchStart', total)
+
             for file_path in wav_files:
                 # Check for stop
                 if not processing_state['running']:
                     logger.info("Processing stopped by user")
-                    if main_window:
-                        main_window.evaluate_js("window.triggerStopped()")
+                    js_call(main_window, 'triggerStopped')
                     break
                 
                 # Check for pause
@@ -361,58 +386,40 @@ class API:
                     logger.info(f"Processing file {completed + 1}/{total}: {file_name}")
                     
                     # Trigger file start event
-                    if main_window:
-                        file_name_escaped = file_name.replace("'", "\\'")
-                        file_id_escaped = file_id.replace("'", "\\'")
-                        main_window.evaluate_js(
-                            f"window.triggerFileStart('{file_id_escaped}', '{file_name_escaped}')"
-                        )
-                    
+                    js_call(main_window, 'triggerFileStart', file_id, file_name)
+
                     def progress_cb(job_id, phase, status, pct):
-                        if main_window:
-                            main_window.evaluate_js(
-                                f"window.triggerPhaseEvent('{job_id}', '{phase}', '{status}', {pct})"
-                            )
-                            
+                        js_call(main_window, 'triggerPhaseEvent', job_id, phase, status, pct)
+
                     def log_cb(job_id, phase, message):
-                        if main_window:
-                            message = message.replace("'", "\\'").replace("\n", "\\n").replace('"', '\\"')
-                            main_window.evaluate_js(
-                                f"window.triggerLog('{job_id}', '{phase}', '{message}')"
-                            )
-                            
+                        js_call(main_window, 'triggerLog', job_id, phase, message)
+
                     normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
-                    
+
                     # Mark file as processed
                     processing_state['processed_files'].add(file_path)
                     completed += 1
-                    
+
                     logger.info(f"File complete: {file_name} ({completed}/{total})")
-                    
+
                     # Send file done event
-                    if main_window:
-                        file_id_escaped = file_id.replace("'", "\\'")
-                        main_window.evaluate_js(f"window.triggerFileDone('{file_id_escaped}')")
-                    
+                    js_call(main_window, 'triggerFileDone', file_id)
+
                     # Send progress update
-                    overall_pct = (completed / total) * 100  # Keep as float
-                    if main_window:
-                        file_id_escaped = file_id.replace("'", "\\'")
-                        main_window.evaluate_js(
-                            f"window.triggerProgress('{file_id_escaped}', 100, {overall_pct:.2f}, {completed}, {total})"
-                        )
-                        
+                    overall_pct = round((completed / total) * 100, 2)  # Keep as float
+                    js_call(main_window, 'triggerProgress', file_id, 100, overall_pct, completed, total)
+
                 except Exception as e:
                     logger.error(f"Failed to process {file_path}: {e}")
-                    if main_window:
-                        error = str(e).replace("'", "\\'").replace("\n", "\\n").replace('"', '\\"')
-                        main_window.evaluate_js(
-                            f"window.triggerError('{error}')"
-                        )
+                    failed = True
+                    js_call(main_window, 'triggerError',
+                            f"Failed to process {os.path.basename(file_path)}: {e}")
                     break
-            
+
+            if failed:
+                logger.info(f"Batch stopped after an error: {completed}/{total} files processed")
             # Processing complete - verify all files
-            if processing_state['running'] and not processing_state['paused']:
+            elif processing_state['running'] and not processing_state['paused']:
                 logger.info(f"Batch processing complete: {completed}/{total} files")
                 logger.info("Verifying output files...")
                 
@@ -422,23 +429,18 @@ class API:
                 if verification_results['missing'] > 0:
                     # Files are actually missing - this is an error
                     logger.error(f"✗ Verification failed: {verification_results['missing']} files missing")
-                    if main_window:
-                        error_msg = f"Verification failed: {verification_results['missing']} files not processed"
-                        error_msg_escaped = error_msg.replace("'", "\\'")
-                        main_window.evaluate_js(f"window.triggerError('{error_msg_escaped}')")
+                    js_call(main_window, 'triggerError',
+                            f"Verification failed: {verification_results['missing']} files not processed")
                 else:
                     # No missing files - success (even if there are property mismatches)
                     logger.info(f"✓ Verification passed: {verification_results['matched']} files processed")
                     if verification_results['mismatched']:
                         logger.info(f"Note: {len(verification_results['mismatched'])} files had property differences (expected with trimming/normalization)")
-                    if main_window:
-                        main_window.evaluate_js("window.triggerAllDone()")
-                    
+                    js_call(main_window, 'triggerAllDone')
+
         except Exception as e:
             logger.error(f"Batch processing error: {e}")
-            if main_window:
-                error = str(e).replace("'", "\\'").replace("\n", "\\n").replace('"', '\\"')
-                main_window.evaluate_js(f"window.triggerError('{error}')")
+            js_call(main_window, 'triggerError', str(e))
         finally:
             if not processing_state['paused']:
                 processing_state['running'] = False

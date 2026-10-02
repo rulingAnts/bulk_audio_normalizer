@@ -644,7 +644,24 @@ window.api.onStopped(() => {
 
 window.api.onError(({ message }) => {
   alert(message);
+  // The batch worker only sends triggerError when the batch has ended (a file
+  // failed, verification failed, or the worker crashed), and it no longer
+  // follows it with triggerAllDone. Unlock the UI here, as onStopped does.
+  stopping = false;
+  setRunning(false);
   batchStatus.textContent = 'Error';
+  if (stopStatus) stopStatus.textContent = '';
+  throttleInfo = '';
+  (async () => {
+    if (outputDir) {
+      const empty = await window.api.validateOutputEmpty(outputDir);
+      outputValidation.textContent = empty ? 'Output folder is empty ✓' : 'Output folder must be empty.';
+      outputValidation.style.color = empty ? '#2ea043' : '#d1242f';
+      btnStart.disabled = !empty || !inputDir || !outputDir;
+    } else {
+      btnStart.disabled = !inputDir || !outputDir;
+    }
+  })();
 });
 
 window.api.onPhaseEvent(({ fileId, phase, status, pct }) => {
