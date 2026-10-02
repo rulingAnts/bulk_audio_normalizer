@@ -1,5 +1,38 @@
 # Pending Features & Work Items
 
+## ⏸ PAUSED 2026-10-02: ship v2.0.2 (the issue #2 fix) through a Windows x64 build workflow
+
+**Status:** requested by Seth, not started. The #2 fix itself is on `dev` (cdec538, 9aa4f74) and
+tested from source. The work was paused before anything was built.
+
+**Asked for:** a GitHub Actions workflow that builds the x64 Windows `.exe` and publishes it as a
+**pre-release**. Seth promotes it to a full release himself after testing the fix.
+
+**What the build must match (read from the repo):**
+- **Artifact:** a single **portable** onefile `.exe`, not an installer. `bulk_audio_normalizer.spec`
+  bundles everything into one `EXE(...)` on Windows, and `build_windows.bat` says "Creates a portable
+  .exe". v2.0.1 shipped `Bulk.Audio.Normalizer.exe`; GitHub turned the spaces in
+  `dist/windows/Bulk Audio Normalizer.exe` into dots.
+- **Runner and Python:** `runs-on: windows-latest` with `actions/setup-python` `architecture: x64`.
+  Assert `platform.machine() == 'AMD64'` before building. Then pip install
+  `requirements.txt` + `requirements-build.txt`; consider pinning pywebview, which is unpinned and
+  would pull 6.x.
+- **FFmpeg:** must be in `python_webview/bin/windows/` before PyInstaller runs, and those files are
+  gitignored. `setup_ffmpeg.py` copies them from the npm package `ffmpeg-static` (`npm install`
+  first). Check that the ffmpeg-static Windows binary is x64, and check its licence note in
+  THIRD_PARTY_NOTICES.md.
+- **Tests:** run `python -m unittest discover -s python_webview/tests` before building.
+- **Trigger and release:** a `v*` tag push (plus `workflow_dispatch`). Create a GitHub release with
+  `prerelease: true` and attach the `.exe`.
+- **The website is safe:** `docs/script.js` reads `releases/latest`, which never returns a
+  pre-release. Before promoting to a full release, attach the macOS `.dmg` (`build_mac.sh` +
+  `create_dmg_mac.sh` on Seth's Mac), or the site's Mac button falls back to the release page.
+- **Cost and policy:** free, because the repo is public and `windows-latest` is a standard runner.
+  Seth approved adding it on 2026-10-02. The push needs `ALLOW_WORKFLOW_PUSH=1` (pre-push hook).
+  Work on `dev`; `main` only with Seth's OK. Bump to `v2.0.2` (already in the spec, README and
+  CHANGELOG on `dev`). Reply on issue #2 once the pre-release exists. Workaround meanwhile: rename
+  files to remove the apostrophe.
+
 ## 🔥 PRIORITY: Clipped/Chopped Recording Detection Tool
 
 **Status:** Design phase - awaiting user decisions before implementation
