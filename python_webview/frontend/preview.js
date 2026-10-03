@@ -8,10 +8,20 @@ btnRevealFolder.addEventListener('click', () => {
   if (lastTmpBase) window.api.revealPath(lastTmpBase);
 });
 
+// The label over a preview card: the path relative to the input folder,
+// after "…" and the separator the platform uses ("…\sub dir #1\01.wav" on
+// Windows, "…/sub dir #1/01.wav" elsewhere). Set with textContent only.
+function cardLabel(original, rel) {
+  const o = String(original || '');
+  const windows = /^[A-Za-z]:\\|^\\\\/.test(o);
+  const display = rel || o.split(windows ? /[\\/]/ : '/').slice(-1)[0];
+  return { display, text: '\u2026' + (windows ? '\\' : '/') + display };
+}
+
 function addCard({ original, preview, rel }) {
   const card = document.createElement('div');
   card.className = 'preview-card';
-  const display = rel || String(original).split(/[\\/]/).slice(-1)[0];
+  const label = cardLabel(original, rel);
   const originalId = `wave_o_${Math.random().toString(36).slice(2)}`;
   const previewId = `wave_p_${Math.random().toString(36).slice(2)}`;
   // Static markup only. The name is set below as text, so '&', '<' and
@@ -46,8 +56,8 @@ function addCard({ original, preview, rel }) {
     </div>
   `;
   const pathEl = card.querySelector('.path');
-  pathEl.textContent = `…/${display}`;
-  pathEl.title = display;
+  pathEl.textContent = label.text;
+  pathEl.title = label.display;
   previewList.appendChild(card);
 
   const makeWS = async (containerId, filePath) => {

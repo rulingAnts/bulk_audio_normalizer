@@ -201,6 +201,7 @@ class FileUrlTests(unittest.TestCase):
         '/Users/seth/Music/' + BLACKBRIX,
         '/tmp/back\\slash #1.wav',
         '/tmp/%2F not a slash.wav',
+        '/\\x/folder starts with a backslash #1.wav',
     ]
     UNC = '\\\\nas\\share #1\\Track #2.wav'
 
@@ -247,6 +248,12 @@ class FileUrlTests(unittest.TestCase):
         self.assertEqual(r['decoded'], '/share #1/Track #2.wav')
         self.assertEqual(r['hash'], '')
 
+    def test_long_path_prefixes(self):
+        drive, unc = self.run_cases(['\\\\?\\C:\\Music\\Track #2.wav',
+                                     '\\\\?\\UNC\\nas\\share #1\\Track #2.wav'])
+        self.assertEqual((drive['host'], drive['decoded'], drive['hash']), ('', '/C:/Music/Track #2.wav', ''))
+        self.assertEqual((unc['host'], unc['decoded'], unc['hash']), ('nas', '/share #1/Track #2.wav', ''))
+
     def test_old_encodeURI_version_was_broken(self):
         """Control: encodeURI leaves '#' alone, so the old URL lost the name's tail."""
         proc = subprocess.run(
@@ -275,10 +282,38 @@ class NoNamesInHtmlTests(unittest.TestCase):
 
     def test_names_are_set_with_textcontent(self):
         renderer = (APP_DIR / 'frontend' / 'renderer.js').read_text(encoding='utf-8')
-        self.assertIn('nameEl.textContent = String(name);', renderer)
+        self.assertRegex(renderer, r'\bnameEl\.textContent\s*=')
         for js in ('renderer.js', 'preview.js'):
             src = (APP_DIR / 'frontend' / js).read_text(encoding='utf-8')
-            self.assertIn('pathEl.textContent = `…/${display}`;', src, js)
+            with self.subTest(file=js):
+                self.assertRegex(src, r'\bpathEl\.textContent\s*=')
+                # Nothing but the static templates and '' is ever assigned as HTML.
+                for rhs in re.findall(r'\.(?:innerHTML|outerHTML)\s*=\s*(\S)', src):
+                    self.assertIn(rhs, "`'")
+                self.assertNotRegex(src, r'insertAdjacentHTML|document\.write')
+
+
+@unittest.skipUnless(NODE, 'node not on PATH')
+class CardLabelTests(unittest.TestCase):
+    """The label over a preview card uses the separator of the platform's paths."""
+
+    CASES = [
+        ('C:\\Music\\sub dir #1\\01.wav', 'sub dir #1\\01.wav', '\u2026\\sub dir #1\\01.wav'),
+        ('\\\\nas\\share\\' + BLACKBRIX, BLACKBRIX, '\u2026\\' + BLACKBRIX),
+        ('/Users/seth/sub dir #1/01.wav', 'sub dir #1/01.wav', '\u2026/sub dir #1/01.wav'),
+        ('/Users/seth/back\\slash.wav', '', '\u2026/back\\slash.wav'),
+        ('C:\\Music\\R&B <live>.wav', '', '\u2026\\R&B <live>.wav'),
+    ]
+
+    def test_both_windows(self):
+        for js in ('renderer.js', 'preview.js'):
+            src = extract_js_function((APP_DIR / 'frontend' / js).read_text(encoding='utf-8'), 'cardLabel')
+            script = (src + '\nconst cases = JSON.parse(process.argv[1]);\n'
+                      'process.stdout.write(JSON.stringify(cases.map(([o, r]) => cardLabel(o, r).text)));')
+            proc = subprocess.run([NODE, '-e', script, json.dumps([c[:2] for c in self.CASES])],
+                                  capture_output=True, text=True, encoding='utf-8', timeout=60)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout), [c[2] for c in self.CASES], js)
 
 
 # --------------------------------------------------------------------------
@@ -613,7 +648,8 @@ class EndToEndNameTests(unittest.TestCase):
         # macOS metadata twin of the issue's file: must be skipped.
         write_appledouble(self.in_dir / "._07 Johnny Don't Go.wav")
         # Every name made its own file (no case or normalization collisions).
-        self.assertEqual(len(main.API().scan_files(str(self.in_dir))), len(self.rels))
+        on_disk = sum(len(files) for _, _, files in os.walk(self.in_dir))
+        self.assertEqual(on_disk, len(self.rels) + 1)
         self.saved_main, self.saved_preview = main.main_window, main.preview_window
         self.addCleanup(setattr, main, 'main_window', self.saved_main)
         self.addCleanup(setattr, main, 'preview_window', self.saved_preview)
@@ -630,20 +666,22 @@ class EndToEndNameTests(unittest.TestCase):
     def check_batch(self, w):
         calls = [parse_call(s) for s in w.scripts]
         fns = [fn for fn, _ in calls]
+        # The names first, so a failure elsewhere does not hide them.
+        started = [args for fn, args in calls if fn == 'triggerFileStart']
+        for rel in self.rels:
+            with self.subTest(rel=rel):
+                self.assertIn([rel, rel], started)
+                out = self.out_dir / rel
+                self.assertTrue(out.is_file(), rel)
+                self.assertGreater(wav_data_bytes(out), 0)
         errors = [args for fn, args in calls if fn == 'triggerError']
         self.assertEqual(errors, [])
         self.assertNotIn('triggerFileFailed', fns)
         self.assertEqual(fns[-1], 'triggerAllDone')
-        started = [args for fn, args in calls if fn == 'triggerFileStart']
-        self.assertEqual(sorted(a[0] for a in started), sorted(self.rels))
         self.assertTrue(all(a[0] == a[1] for a in started))
         self.assertNotIn("._07 Johnny Don't Go.wav", [a[0] for a in started])
+        self.assertEqual(sorted(a[0] for a in started), sorted(self.rels))
         self.assertEqual(calls[0], ('triggerBatchStart', [len(self.rels)]))
-        for rel in self.rels:
-            with self.subTest(rel=rel):
-                out = self.out_dir / rel
-                self.assertTrue(out.is_file(), rel)
-                self.assertGreater(wav_data_bytes(out), 0)
         self.assertFalse((self.out_dir / "._07 Johnny Don't Go.wav").exists())
         if NODE:
             for (fn, args), result in zip(calls, run_in_node(w.scripts, wrap=True)):

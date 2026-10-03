@@ -42,13 +42,17 @@ const previewInfo = $('#previewInfo');
 // Separators and a Windows drive letter ("C:") stay as they are. Backslashes
 // are separators only in a Windows path (drive letter or \\server\share); in
 // a POSIX path a backslash is part of the name and is encoded.
+// Win32 long-path prefixes are dropped: \\?\C:\x -> C:\x and
+// \\?\UNC\server\share -> \\server\share. A POSIX path whose first folder
+// name starts with a backslash ("/\x/a.wav") is not UNC.
 // (The pywebview build does not use this: its preview window loads audio as
 // data: URLs from get_audio_file. Kept correct for any file:// use.)
 function toFileUrl(p) {
   if (!p) return '';
   let pathStr = String(p);
   if (/^file:\/\//i.test(pathStr)) return pathStr;
-  const isWindows = /^[A-Za-z]:[\\/]/.test(pathStr) || /^[\\/]{2}[^\\/]/.test(pathStr);
+  pathStr = pathStr.replace(/^\\\\[?.]\\UNC\\/i, '\\\\').replace(/^\\\\[?.]\\(?=[A-Za-z]:\\)/, '');
+  const isWindows = /^[A-Za-z]:[\\/]/.test(pathStr) || /^(\\\\|\/\/)[^\\/]/.test(pathStr);
   if (isWindows) pathStr = pathStr.replace(/\\/g, '/');
   let host = '';
   if (isWindows && pathStr.startsWith('//')) {
@@ -776,10 +780,20 @@ btnPreview.addEventListener('click', async () => {
   }
 });
 
+// The label over a preview card: the path relative to the input folder,
+// after "…" and the separator the platform uses ("…\sub dir #1\01.wav" on
+// Windows, "…/sub dir #1/01.wav" elsewhere). Set with textContent only.
+function cardLabel(original, rel) {
+  const o = String(original || '');
+  const windows = /^[A-Za-z]:\\|^\\\\/.test(o);
+  const display = rel || o.split(windows ? /[\\/]/ : '/').slice(-1)[0];
+  return { display, text: '\u2026' + (windows ? '\\' : '/') + display };
+}
+
 window.api.onPreviewFileDone(({ original, preview, rel }) => {
   const card = document.createElement('div');
   card.className = 'preview-card';
-  const display = rel || String(original).split(/[\\/]/).slice(-1)[0];
+  const label = cardLabel(original, rel);
   const originalId = `wave_o_${Math.random().toString(36).slice(2)}`;
   const previewId = `wave_p_${Math.random().toString(36).slice(2)}`;
   // Static markup only. The name is set below as text, so '&', '<' and
@@ -814,8 +828,8 @@ window.api.onPreviewFileDone(({ original, preview, rel }) => {
     </div>
   `;
   const pathEl = card.querySelector('.path');
-  pathEl.textContent = `…/${display}`;
-  pathEl.title = display;
+  pathEl.textContent = label.text;
+  pathEl.title = label.display;
   previewList.appendChild(card);
 
   // Init WaveSurfer instances with regions and dragSelection
