@@ -45,27 +45,6 @@ processing_state = {
 }
 
 
-def js_escape_path(path: str) -> str:
-    """
-    Escape a file path for safe use in JavaScript strings.
-    Converts backslashes to forward slashes (works on both Windows and macOS)
-    and escapes quotes.
-    
-    Args:
-        path: File path to escape
-        
-    Returns:
-        Escaped path safe for JavaScript string literals
-    """
-    if not path:
-        return ''
-    # Convert backslashes to forward slashes (works on Windows and macOS)
-    path = path.replace('\\', '/')
-    # Escape single and double quotes
-    path = path.replace("'", "\\'").replace('"', '\\"')
-    return path
-
-
 def js_call(window, fn: str, *args) -> None:
     """
     Call ``window.<fn>(*args)`` in a webview window.
@@ -543,20 +522,13 @@ class API:
                     out_size = os.path.getsize(out_path)
                     logger.info(f"Output file created: {out_path} ({out_size} bytes)")
                     
-                    # Send completion to preview window
+                    # Send completion to preview window. The exact native
+                    # paths go across (js_call JSON-encodes them), so the
+                    # preview window can hand them straight back to
+                    # get_audio_file and reveal_path.
                     if preview_window:
-                        logger.info(f"Sending preview file update to window...")
-                        original = js_escape_path(file_path)
-                        preview = js_escape_path(out_path)
-                        rel = js_escape_path(rel_path)
-                        tmp = js_escape_path(tmp_base)
-                        try:
-                            preview_window.evaluate_js(
-                                f"window.triggerPreviewFile('{original}', '{preview}', '{rel}', '{tmp}')"
-                            )
-                            logger.info(f"Preview file update sent successfully")
-                        except Exception as e:
-                            logger.error(f"Failed to send preview file update: {e}")
+                        js_call(preview_window, 'triggerPreviewFile',
+                                file_path, out_path, rel_path, tmp_base)
                     else:
                         logger.warning("Preview window is None, cannot send update")
                         
@@ -564,14 +536,7 @@ class API:
                     logger.error(f"Preview failed for {file_path}: {e}", exc_info=True)
                     
             # Send completion
-            if preview_window:
-                tmp = js_escape_path(tmp_base)
-                try:
-                    preview_window.evaluate_js(
-                        f"window.triggerPreviewDone({len(files)}, '{tmp}')"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send preview done: {e}")
+            js_call(preview_window, 'triggerPreviewDone', len(files), tmp_base)
                     
         except Exception as e:
             logger.error(f"Preview worker error: {e}")

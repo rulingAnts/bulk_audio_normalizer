@@ -36,16 +36,35 @@ const btnPreview = $('#btnPreview');
 const previewCount = $('#previewCount');
 const previewList = $('#previewList');
 const previewInfo = $('#previewInfo');
-// Cross-platform converter for local file paths to file:// URLs
+// Cross-platform converter for local file paths to file:// URLs.
+// Each path segment goes through encodeURIComponent: encodeURI left '#' and
+// '?' alone, so "Track #2.wav" became a URL fragment and never loaded.
+// Separators and a Windows drive letter ("C:") stay as they are. Backslashes
+// are separators only in a Windows path (drive letter or \\server\share); in
+// a POSIX path a backslash is part of the name and is encoded.
+// (The pywebview build does not use this: its preview window loads audio as
+// data: URLs from get_audio_file. Kept correct for any file:// use.)
 function toFileUrl(p) {
   if (!p) return '';
-  if (p.startsWith('file://')) return p;
   let pathStr = String(p);
-  // Normalize Windows backslashes to forward slashes
-  pathStr = pathStr.replace(/\\/g, '/');
-  // Ensure drive letter has a preceding slash on Windows (e.g., C:/ -> /C:/)
-  if (/^[A-Za-z]:\//.test(pathStr)) pathStr = '/' + pathStr;
-  return 'file://' + encodeURI(pathStr);
+  if (/^file:\/\//i.test(pathStr)) return pathStr;
+  const isWindows = /^[A-Za-z]:[\\/]/.test(pathStr) || /^[\\/]{2}[^\\/]/.test(pathStr);
+  if (isWindows) pathStr = pathStr.replace(/\\/g, '/');
+  let host = '';
+  if (isWindows && pathStr.startsWith('//')) {
+    // UNC: //server/share/dir/file.wav -> file://server/share/dir/file.wav
+    const rest = pathStr.slice(2);
+    const cut = rest.indexOf('/');
+    host = cut === -1 ? rest : rest.slice(0, cut);
+    pathStr = cut === -1 ? '/' : rest.slice(cut);
+  } else if (/^[A-Za-z]:\//.test(pathStr)) {
+    pathStr = '/' + pathStr; // C:/x -> /C:/x
+  }
+  const encoded = pathStr
+    .split('/')
+    .map((seg, i) => (i === 1 && !host && /^[A-Za-z]:$/.test(seg)) ? seg : encodeURIComponent(seg))
+    .join('/');
+  return 'file://' + encodeURIComponent(host) + encoded;
 }
 
 // Debug: print binary paths and packaging info into DevTools console
@@ -523,9 +542,11 @@ function ensureFileItem(id, name) {
   if (fileItems.has(id)) return fileItems.get(id);
   const el = document.createElement('div');
   el.className = 'file-item';
+  // Static markup only. The file name is set below as text, so '&', '<',
+  // quotes and the rest show literally and can never become HTML.
   el.innerHTML = `
     <div class="top">
-      <div class="name" title="${name}">${name}</div>
+      <div class="name"></div>
     </div>
     <div class="phase-bars">
       <div class="phase">
@@ -542,6 +563,9 @@ function ensureFileItem(id, name) {
       </div>
     </div>
   `;
+  const nameEl = el.querySelector('.name');
+  nameEl.textContent = String(name);
+  nameEl.title = String(name);
   fileList.appendChild(el);
   fileItems.set(id, el);
   if (autoScrollFiles) {
@@ -746,11 +770,13 @@ btnPreview.addEventListener('click', async () => {
 window.api.onPreviewFileDone(({ original, preview, rel }) => {
   const card = document.createElement('div');
   card.className = 'preview-card';
-  const display = rel || original.split('/').slice(-1)[0];
+  const display = rel || String(original).split(/[\\/]/).slice(-1)[0];
   const originalId = `wave_o_${Math.random().toString(36).slice(2)}`;
   const previewId = `wave_p_${Math.random().toString(36).slice(2)}`;
+  // Static markup only. The name is set below as text, so '&', '<' and
+  // quotes in a file name show literally.
   card.innerHTML = `
-    <div class="path" title="${display}">…/${display}</div>
+    <div class="path"></div>
     <div class="players">
       <div class="wave-wrap">
         <strong>Original</strong>
@@ -778,6 +804,9 @@ window.api.onPreviewFileDone(({ original, preview, rel }) => {
       </div>
     </div>
   `;
+  const pathEl = card.querySelector('.path');
+  pathEl.textContent = `…/${display}`;
+  pathEl.title = display;
   previewList.appendChild(card);
 
   // Init WaveSurfer instances with regions and dragSelection

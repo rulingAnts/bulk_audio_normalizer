@@ -11,11 +11,13 @@ btnRevealFolder.addEventListener('click', () => {
 function addCard({ original, preview, rel }) {
   const card = document.createElement('div');
   card.className = 'preview-card';
-  const display = rel || original.split('/').slice(-1)[0];
+  const display = rel || String(original).split(/[\\/]/).slice(-1)[0];
   const originalId = `wave_o_${Math.random().toString(36).slice(2)}`;
   const previewId = `wave_p_${Math.random().toString(36).slice(2)}`;
+  // Static markup only. The name is set below as text, so '&', '<' and
+  // quotes in a file name show literally.
   card.innerHTML = `
-    <div class="path" title="${display}">…/${display}</div>
+    <div class="path"></div>
     <div class="players">
       <div class="wave-wrap">
         <strong>Original</strong>
@@ -43,6 +45,9 @@ function addCard({ original, preview, rel }) {
       </div>
     </div>
   `;
+  const pathEl = card.querySelector('.path');
+  pathEl.textContent = `…/${display}`;
+  pathEl.title = display;
   previewList.appendChild(card);
 
   const makeWS = async (containerId, filePath) => {
