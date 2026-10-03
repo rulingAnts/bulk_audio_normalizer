@@ -127,14 +127,26 @@ jobs:
           [ -d "$app" ] || fail "no app bundle"
           [ -f "$dmg" ] || fail "no dmg"
 
-          # FFmpeg, its license text and the notice are inside, unchanged
-          inside="$(find "$app/Contents" -type d -path '*/bin/macos' | head -1)"
-          [ -n "$inside" ] || fail "no bin/macos folder in the app"
-          echo "Bundled FFmpeg folder: $inside"
-          for f in ffmpeg ffprobe COPYING.LGPLv2.1 FFMPEG-NOTICE.txt; do
-            [ -f "$inside/$f" ] || fail "$f missing from the app"
-            cmp "$inside/$f" "bin/macos/$f" || fail "$f in the app differs from bin/macos/$f"
+          # FFmpeg, its license text and the notice are inside, unchanged. PyInstaller keeps
+          # data in Contents/Resources and binaries in Contents/Frameworks and links the two,
+          # so the folder is checked under both; it also re-signs the binaries, so those are
+          # compared with their signatures removed (.github/scripts/same_macho.py).
+          ls -la "$app/Contents/Resources/bin/macos/" "$app/Contents/Frameworks/bin/macos/"
+          for inside in "$app/Contents/Resources/bin/macos" "$app/Contents/Frameworks/bin/macos"; do
+            for f in COPYING.LGPLv2.1 FFMPEG-NOTICE.txt; do
+              [ -f "$inside/$f" ] || fail "$f missing from $inside"
+              cmp "$inside/$f" "bin/macos/$f" || fail "$inside/$f differs from bin/macos/$f"
+            done
+            for bin in ffmpeg ffprobe; do
+              [ -f "$inside/$bin" ] || fail "$bin missing from $inside"
+              tmp="$(mktemp -d)"
+              cp "$inside/$bin" "$tmp/bundled"; cp "bin/macos/$bin" "$tmp/built"
+              codesign --remove-signature "$tmp/bundled"; codesign --remove-signature "$tmp/built"
+              python ../.github/scripts/same_macho.py "$tmp/bundled" "$tmp/built" \
+                || fail "$inside/$bin is not the ffmpeg that was built"
+            done
           done
+          inside="$app/Contents/Frameworks/bin/macos"
           for bin in ffmpeg ffprobe; do
             file "$inside/$bin" | grep -q 'Mach-O 64-bit executable arm64$' || fail "$bin is not arm64"
             lic="$("$inside/$bin" -hide_banner -L 2>&1)"
