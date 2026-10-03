@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.2] - 2026-10-03 (pre-release, Windows only, still being tested)
+## [2.0.2] - 2026-10-03 (pre-release, still being tested)
 
 ### Fixed
 - Files whose names contain an apostrophe (e.g. "Don't") stopped the batch with an error ([#2](https://github.com/rulingAnts/bulk_audio_normalizer/issues/2))
@@ -17,6 +17,20 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Windows x64 builds are made by a GitHub Actions workflow and published as pre-releases first
+- macOS (Apple silicon) .dmg, built by a GitHub Actions workflow (`build-macos.yml`). Its FFmpeg
+  and FFprobe are FFmpeg 6.1.6 compiled from FFmpeg's source with no external libraries, under
+  the LGPLv2.1 (`build_ffmpeg_mac.sh`); the license text and a notice ship inside the app, and the
+  exact source is attached to the release
+- The app's footer says which FFmpeg it uses and under which license
+
+### Changed
+- `setup_ffmpeg.py` refuses to run on macOS and points to `build_ffmpeg_mac.sh`
+
+### Removed
+- The macOS downloads of v1.5.1, v2.0.0 and v2.0.1, and the v1.5.1 Windows installer, were taken
+  off the releases page: their macOS ffmpeg (from npm ffmpeg-static) was built with
+  `--enable-nonfree`, which FFmpeg marks as not legally redistributable. The v2.0.1 macOS app also
+  bundled an Intel-only ffprobe that needed Rosetta 2
 
 ## [2.0.1] - 2025-11-30
 

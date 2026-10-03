@@ -1,0 +1,229 @@
+# Build the macOS (Apple silicon) .dmg, plus the FFmpeg source archive that must
+# travel with it.
+#
+# What it builds: FFmpeg from source (python_webview/build_ffmpeg_mac.sh: LGPL v2.1+,
+#   no external libraries, pinned to FFmpeg's n6.1.6 commit), the app with PyInstaller
+#   (bulk_audio_normalizer.spec), and "Bulk Audio Normalizer.dmg" with create-dmg. It runs
+#   the unit tests first, against the very ffmpeg/ffprobe that get bundled.
+# Assets: Bulk.Audio.Normalizer.dmg and ffmpeg-<version>-source.tar.xz. The LGPL wants the
+#   FFmpeg source offered from the same place as the binary, so the two always go together.
+# Cost: free. The repository is public and macos-15 is a standard GitHub-hosted runner
+#   (Seth asked for the Mac build to run on GitHub on 2026-10-03). Do not switch to a
+#   larger runner (macos-*-large / -xlarge are billable even on public repos) or add a
+#   schedule.
+# Triggers:
+#   - a tag v* (git push origin v2.0.3): builds the tag and adds both assets to that tag's
+#     release. The Windows workflow creates the release (as a pre-release); this one waits
+#     up to 30 minutes for it to appear and never creates, edits or promotes a release.
+#   - a branch build/macos-<tag> (git push origin dev:build/macos-v2.0.2): builds that
+#     branch's commit for release <tag> and keeps the result as a workflow artifact only,
+#     so it can be checked before it is attached by hand (gh release upload). Delete the
+#     branch afterwards. (workflow_dispatch is not used: GitHub only offers it for
+#     workflows on main.)
+# The .dmg is ad-hoc signed, not notarized: on first launch macOS users choose
+#   System Settings > Privacy & Security > Open Anyway.
+
+name: Build macOS dmg
+
+on:
+  push:
+    tags: ['v*']
+    branches: ['build/macos-*']
+
+permissions:
+  contents: write # upload the assets to an existing release; nothing else
+
+concurrency:
+  group: build-macos-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      FFMPEG_TAG: n6.1.6
+      FFMPEG_COMMIT: f1e3a2bf7a2f2cde936d1ed97f09a26853d20125 # FFmpeg's n6.1.6 tag
+      FFMPEG_GIT: https://github.com/FFmpeg/FFmpeg.git # FFmpeg's own mirror; the commit is pinned
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Work out the release tag and what to do with the result
+        # GITHUB_REF_NAME is read from the environment, never pasted into the script.
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"; mode=publish
+          else
+            tag="${GITHUB_REF_NAME#build/macos-}"; mode=artifact
+          fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Not a release tag: '$tag'" >&2; exit 1
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "MODE=$mode" >> "$GITHUB_ENV"
+          echo "Building for $tag ($mode) from $GITHUB_SHA"
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          architecture: arm64
+
+      - name: Python and the runner must be Apple silicon
+        run: |
+          set -euo pipefail
+          uname -m
+          sw_vers
+          python -c "import platform, sys; print(sys.version, platform.machine()); assert platform.machine() == 'arm64', 'not arm64 Python'"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Build FFmpeg and FFprobe from source (LGPL, checked by the script)
+        working-directory: python_webview
+        run: |
+          set -euo pipefail
+          ./build_ffmpeg_mac.sh
+          ls -la bin/macos
+          cat bin/macos/FFMPEG-NOTICE.txt
+
+      - name: Install Python packages (pinned)
+        working-directory: python_webview
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-build.txt -c constraints-macos-build.txt
+          python -m pip freeze
+
+      - name: Unit tests (real FFmpeg, the one that gets bundled)
+        env:
+          BAN_REQUIRE_FFMPEG: '1'
+          BAN_REQUIRE_NODE: '1'
+          BAN_REQUIRE_BUNDLED_FFMPEG: '1'
+        run: python -m unittest discover -s python_webview/tests -v
+
+      - name: Build the app (PyInstaller) and the dmg (create-dmg)
+        working-directory: python_webview
+        run: |
+          set -euo pipefail
+          brew install create-dmg
+          ./build_mac.sh
+          ./create_dmg_mac.sh
+
+      - name: Check the app and the dmg
+        working-directory: python_webview
+        run: |
+          set -euo pipefail
+          fail() { echo "FAILED: $*" >&2; exit 1; }
+          app="dist/macos/Bulk Audio Normalizer.app"
+          dmg="dist/macos/Bulk Audio Normalizer.dmg"
+          [ -d "$app" ] || fail "no app bundle"
+          [ -f "$dmg" ] || fail "no dmg"
+
+          # FFmpeg, its license text and the notice are inside, unchanged
+          inside="$(find "$app/Contents" -type d -path '*/bin/macos' | head -1)"
+          [ -n "$inside" ] || fail "no bin/macos folder in the app"
+          echo "Bundled FFmpeg folder: $inside"
+          for f in ffmpeg ffprobe COPYING.LGPLv2.1 FFMPEG-NOTICE.txt; do
+            [ -f "$inside/$f" ] || fail "$f missing from the app"
+            cmp "$inside/$f" "bin/macos/$f" || fail "$f in the app differs from bin/macos/$f"
+          done
+          for bin in ffmpeg ffprobe; do
+            file "$inside/$bin" | grep -q 'Mach-O 64-bit executable arm64$' || fail "$bin is not arm64"
+            lic="$("$inside/$bin" -hide_banner -L 2>&1)"
+            grep -q 'GNU Lesser General Public' <<< "$lic" || fail "$bin does not report the LGPL"
+            if grep -qi nonfree <<< "$lic"; then fail "$bin reports nonfree parts"; fi
+            conf="$("$inside/$bin" -hide_banner -buildconf 2>&1)"
+            if grep -qE -- '--enable-(nonfree|gpl|version3)' <<< "$conf"; then fail "$bin has a GPL/version3/nonfree flag"; fi
+            other="$(otool -L "$inside/$bin" | tail -n +2 | awk '{print $1}' | grep -v -E '^(/usr/lib/|/System/Library/)' || true)"
+            [ -z "$other" ] || fail "$bin links $other"
+          done
+
+          # The app itself: arm64, a valid (ad-hoc) signature
+          exe="$app/Contents/MacOS/Bulk Audio Normalizer"
+          file "$exe"
+          lipo -archs "$exe" | grep -qx arm64 || fail "app executable is not arm64 only"
+          codesign --verify --deep --strict "$app" || fail "app signature does not verify"
+
+          # The oldest macOS it can run on is the highest "minos" of any Mach-O file inside
+          # (Python, PyObjC, FFmpeg...). The website says macOS 11; check it still holds.
+          minos="$(find "$app/Contents" -type f -print0 \
+            | xargs -0 file | grep 'Mach-O' | cut -d: -f1 \
+            | while read -r f; do vtool -show-build "$f" 2> /dev/null | awk '/minos/{print $2}'; done \
+            | sort -t. -k1,1n -k2,2n | tail -1)"
+          echo "Highest minimum macOS of the files inside the app: $minos"
+          echo "MINOS=$minos" >> "$GITHUB_ENV"
+          [ "${minos%%.*}" -le 11 ] || echo "::warning::the app needs macOS $minos; update the website (it says macOS 11)"
+
+          # The dmg mounts and holds the same app
+          mnt="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" > /dev/null
+          trap 'hdiutil detach "$mnt" > /dev/null || true' EXIT
+          [ -d "$mnt/Bulk Audio Normalizer.app" ] || fail "dmg has no app"
+          [ -L "$mnt/Applications" ] || fail "dmg has no Applications link"
+          diff -rq "$app" "$mnt/Bulk Audio Normalizer.app" || fail "app in the dmg differs from the built app"
+
+          # It starts: launch the copy in the dmg, give it 20 s, it must still be running
+          log="$RUNNER_TEMP/app-launch.log"
+          "$mnt/Bulk Audio Normalizer.app/Contents/MacOS/Bulk Audio Normalizer" > "$log" 2>&1 &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2> /dev/null; then
+            cat "$log"; wait "$pid" || true; fail "the app quit within 20 s of launch"
+          fi
+          kill "$pid"; wait "$pid" 2> /dev/null || true
+          echo "App launched and kept running for 20 s."
+          tail -20 "$log" || true
+
+      - name: Collect the assets
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          cp "python_webview/dist/macos/Bulk Audio Normalizer.dmg" upload/Bulk.Audio.Normalizer.dmg
+          src="$(ls python_webview/build/ffmpeg/ffmpeg-*-source.tar.xz)"
+          cp "$src" upload/
+          cd upload
+          shasum -a 256 * | tee SHA256SUMS.txt
+          {
+            echo "### macOS assets for $TAG ($MODE)"
+            echo
+            echo "Built from \`$GITHUB_SHA\`. Runs on Apple silicon, macOS ${MINOS:-?} or later."
+            echo
+            while read -r sum name; do
+              echo "- \`$name\`: $(du -h "$name" | cut -f1), SHA-256 \`$sum\`"
+            done < SHA256SUMS.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Bulk.Audio.Normalizer-${{ env.TAG }}-macos-arm64
+          path: upload/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Add both assets to the release (tag builds only)
+        if: env.MODE == 'publish'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName > /dev/null 2>&1; then
+              gh release upload "$TAG" upload/Bulk.Audio.Normalizer.dmg upload/ffmpeg-*-source.tar.xz \
+                --clobber --repo "$GITHUB_REPOSITORY"
+              gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease,url,assets \
+                --jq '{isPrerelease, url, assets: [.assets[].name]}'
+              exit 0
+            fi
+            echo "Release $TAG does not exist yet (the Windows workflow creates it); waiting..."
+            sleep 30
+          done
+          echo "Release $TAG never appeared; the assets are in the workflow artifact." >&2
+          exit 1

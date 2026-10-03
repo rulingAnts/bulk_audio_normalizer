@@ -6,7 +6,7 @@ This directory contains platform-specific FFmpeg and FFprobe binaries for PyInst
 
 ```
 bin/
-├── macos/          # macOS binaries (Intel and Apple Silicon)
+├── macos/          # macOS binaries (built for the build Mac's architecture)
 │   ├── ffmpeg
 │   └── ffprobe
 └── windows/        # Windows binaries (x64)
@@ -16,17 +16,22 @@ bin/
 
 ## macOS Binaries
 
-Location: `bin/macos/`
+Location: `bin/macos/` (`ffmpeg`, `ffprobe`, `COPYING.LGPLv2.1`, `FFMPEG-NOTICE.txt`)
 
 **Setup:**
 ```bash
-python3 setup_ffmpeg.py
+./build_ffmpeg_mac.sh
 ```
 
-This downloads platform-appropriate FFmpeg binaries and places them in `bin/macos/`.
+This builds FFmpeg 6.1.6 from FFmpeg's own source (pinned commit) for this Mac's architecture:
+LGPL v2.1+, no external libraries, linked only against macOS system libraries. It also writes
+the license text and a notice (the spec bundles both) and `build/ffmpeg/ffmpeg-<version>-source.tar.xz`,
+the exact source, which must be attached to the release next to the `.dmg`. It needs the Xcode
+Command Line Tools. `build_mac.sh` runs it when any of the four files is missing.
 
-**Source:**
-- Downloaded via setup_ffmpeg.py from ffmpeg-static npm package or direct download
+**Never** use the npm `ffmpeg-static` macOS binary: it is configured with `--enable-nonfree`
+("not legally redistributable"), and `ffprobe-static` has no arm64 ffprobe. `setup_ffmpeg.py`
+refuses to run on macOS for that reason.
 
 ## Windows Binaries
 
@@ -90,9 +95,8 @@ To update to newer FFmpeg versions:
 
 **macOS:**
 ```bash
-# Rerun setup script
-python3 setup_ffmpeg.py
-# Or manually download and replace in bin/macos/
+# Change FFMPEG_TAG and FFMPEG_COMMIT (see the script's header), then
+./build_ffmpeg_mac.sh
 ```
 
 **Windows:**
@@ -109,7 +113,7 @@ cp node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe python_webview/bin/wind
 
 These binaries are typically excluded from git due to their large size. Users building from source should:
 
-1. Run `python3 setup_ffmpeg.py` (macOS)
+1. Run `./build_ffmpeg_mac.sh` (macOS)
 2. Copy binaries from Electron build (Windows)
 
 Or download directly from [ffmpeg.org](https://ffmpeg.org/download.html).

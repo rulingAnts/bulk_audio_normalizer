@@ -11,8 +11,13 @@ notice linking to the pre-release (`main`, fb03689).
 
 **Before promoting v2.0.2 to a full release:**
 - Confirm the fix on a real Windows PC (ask on issue #2; the exe itself is never launched in CI).
-- Build and attach the macOS `.dmg` (`build_mac.sh` + `create_dmg_mac.sh`), or the site's Mac
-  button falls back to the release page.
+- Try the macOS `.dmg` on a real Mac. It is built by `.github/workflows/build-macos.yml` (Apple
+  silicon only; FFmpeg 6.1.6 from source, LGPLv2.1) and attached with
+  `ffmpeg-6.1.6-source.tar.xz`, which must stay next to it (the LGPL asks for the source in the
+  same place). Until a full release has a `.dmg`, the site's Mac button offers the newest release
+  that has one and says "pre-release".
+- Promoting it also fixes the README's download line, which points at the v2.0.2 pre-release for
+  macOS for now.
 - Delete `#prerelease-notice` from `docs/index.html` when you promote it. `docs/script.js` hides it
   once no newer pre-release exists, but visitors without JavaScript or GitHub API access still see
   it.
@@ -40,6 +45,17 @@ keeps its notes and pre-release flag; only the exe is replaced.
 - **Releases ship the exe only:** THIRD_PARTY_NOTICES.md's terms (ship the notice, the AGPL text
   and the corresponding source, including FFmpeg's) are not met by an exe-only release — same as
   v2.0.1.
+- **Windows FFmpeg is a GPLv3 build with no source offer.** `ffmpeg.exe` (gyan.dev 6.1.1 via
+  ffmpeg-static) and `ffprobe.exe` (4.0.2, an old zeranoe build via ffprobe-static) link many
+  GPL libraries, whose complete source the GPL asks us to offer. Simplest fix: build Windows'
+  FFmpeg from source the way the Mac's is (LGPL, no external libraries; cross-compile with
+  mingw on ubuntu-latest, or MSYS2 on windows-latest), attach its source the same way, and drop
+  ffprobe-static.
+- **No Intel Mac build.** The Mac app is arm64 only (macos-15 runner). An x86_64 build
+  (`macos-15-intel` runner, standard and free on this public repo) or a universal one would cover
+  older Macs.
+- **Not notarized:** first launch needs Privacy & Security → "Open Anyway". Notarizing needs an
+  Apple Developer account (99 USD a year).
 
 ## 🔥 PRIORITY: Clipped/Chopped Recording Detection Tool
 

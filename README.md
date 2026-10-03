@@ -42,7 +42,8 @@ Python application to batch-process WAV files for linguistics and fieldwork. Sup
 ```bash
 cd python_webview
 pip install -r requirements.txt
-python3 setup_ffmpeg.py  # Downloads FFmpeg binaries
+./build_ffmpeg_mac.sh    # macOS: builds an LGPL FFmpeg from source (needs Xcode Command Line Tools)
+# python setup_ffmpeg.py # Windows: copies FFmpeg from npm ffmpeg-static (run npm install first)
 python3 main.py
 ```
 
@@ -58,8 +59,16 @@ Create standalone applications that don't require Python installation:
 ```bash
 cd python_webview
 pip3 install -r requirements-build.txt
-./build_mac.sh              # Creates .app bundle
-./create_dmg_mac.sh         # Creates DMG installer (optional)
+./build_mac.sh              # Builds FFmpeg from source if needed, then the .app bundle
+./create_dmg_mac.sh         # Creates DMG installer (optional; brew install create-dmg)
+```
+
+Release builds are made on GitHub instead: `.github/workflows/build-macos.yml` (Apple silicon
+.dmg plus the FFmpeg source archive) and `build-windows.yml` (portable .exe), both on a `v*` tag.
+The FFmpeg in the macOS app is FFmpeg 6.1.6 under the LGPLv2.1; never bundle the npm
+ffmpeg-static macOS binary, which is a nonfree build (see THIRD_PARTY_NOTICES.md).
+
+```bash
 ```
 
 **Windows:**

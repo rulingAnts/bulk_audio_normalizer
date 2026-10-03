@@ -37,6 +37,10 @@ else:
         ffmpeg_datas.append(('bin/macos/ffmpeg', 'bin/macos'))
     if os.path.exists('bin/macos/ffprobe'):
         ffmpeg_datas.append(('bin/macos/ffprobe', 'bin/macos'))
+    # FFmpeg's LGPL text and our notice travel with the binaries (build_ffmpeg_mac.sh)
+    for notice in ('COPYING.LGPLv2.1', 'FFMPEG-NOTICE.txt'):
+        if os.path.exists(f'bin/macos/{notice}'):
+            ffmpeg_datas.append((f'bin/macos/{notice}', 'bin/macos'))
 
 # Collect all backend modules
 backend_modules = collect_submodules('backend')

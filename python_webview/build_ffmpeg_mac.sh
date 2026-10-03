@@ -19,18 +19,29 @@
 #   ./build_ffmpeg_mac.sh
 # Environment:
 #   FFMPEG_TAG     FFmpeg release tag to build (default n6.1.6)
+#   FFMPEG_COMMIT  the commit that tag must point at; the build stops if the
+#                  checkout differs (default: f1e3a2bf..., FFmpeg's n6.1.6)
+#   FFMPEG_GIT     where to clone from (default https://git.ffmpeg.org/ffmpeg.git;
+#                  https://github.com/FFmpeg/FFmpeg.git is FFmpeg's own mirror)
 #   FFMPEG_SRC     an existing checkout of that tag (default: clone one)
 #   FFMPEG_WORK    scratch directory (default build/ffmpeg)
 #   MACOS_MIN      minimum macOS version (default 11.0, the app's own minimum)
 #
-# Redistribution: the LGPL asks that the FFmpeg source you ship be available
-# to recipients. The release notes should name the tag built here and link
-# its source (https://ffmpeg.org/releases/ffmpeg-<version>.tar.xz).
+# Redistribution (the LGPL, and FFmpeg's checklist at ffmpeg.org/legal.html):
+#   - bin/macos/ also gets COPYING.LGPLv2.1 and FFMPEG-NOTICE.txt, which the
+#     app bundles next to the binaries;
+#   - the exact source that was built, plus BUILD-INFO.txt with the configure
+#     line, is written to $FFMPEG_WORK/ffmpeg-<version>-source.tar.xz. Attach it
+#     to the same GitHub release as the .dmg (same place as the binary).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FFMPEG_TAG="${FFMPEG_TAG:-n6.1.6}"
+FFMPEG_GIT="${FFMPEG_GIT:-https://git.ffmpeg.org/ffmpeg.git}"
+if [ -z "${FFMPEG_COMMIT+set}" ] && [ "$FFMPEG_TAG" = n6.1.6 ]; then
+    FFMPEG_COMMIT=f1e3a2bf7a2f2cde936d1ed97f09a26853d20125
+fi
 FFMPEG_WORK="${FFMPEG_WORK:-$SCRIPT_DIR/build/ffmpeg}"
 MACOS_MIN="${MACOS_MIN:-11.0}"
 OUT_DIR="$SCRIPT_DIR/bin/macos"
@@ -48,27 +59,36 @@ if [ -z "${FFMPEG_SRC:-}" ]; then
     if [ ! -f "$FFMPEG_SRC/configure" ]; then
         echo "Fetching FFmpeg $FFMPEG_TAG source..."
         git -c advice.detachedHead=false clone --depth 1 --branch "$FFMPEG_TAG" \
-            https://git.ffmpeg.org/ffmpeg.git "$FFMPEG_SRC"
+            "$FFMPEG_GIT" "$FFMPEG_SRC"
     fi
 fi
 FFMPEG_SRC="$(cd "$FFMPEG_SRC" && pwd)"
+
+if [ -n "${FFMPEG_COMMIT:-}" ]; then
+    head="$(git -C "$FFMPEG_SRC" rev-parse HEAD 2>/dev/null || echo none)"
+    if [ "$head" != "$FFMPEG_COMMIT" ]; then
+        echo "FFmpeg checkout is at $head, expected $FFMPEG_COMMIT for $FFMPEG_TAG." >&2
+        exit 1
+    fi
+fi
 
 BUILD_DIR="$FFMPEG_WORK/build-$FFMPEG_TAG-$ARCH"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
+CONFIGURE_FLAGS=(
+    --cc=clang
+    --arch="$ARCH"
+    --disable-autodetect
+    --enable-pthreads
+    --disable-ffplay
+    --disable-doc
+    --extra-cflags="-mmacosx-version-min=$MACOS_MIN"
+    --extra-ldflags="-mmacosx-version-min=$MACOS_MIN"
+)
 echo "Configuring FFmpeg $FFMPEG_TAG for $ARCH (macOS $MACOS_MIN+)..."
-"$FFMPEG_SRC/configure" \
-    --cc=clang \
-    --arch="$ARCH" \
-    --disable-autodetect \
-    --enable-pthreads \
-    --disable-ffplay \
-    --disable-doc \
-    --extra-cflags="-mmacosx-version-min=$MACOS_MIN" \
-    --extra-ldflags="-mmacosx-version-min=$MACOS_MIN" \
-    | tee configure.log
+"$FFMPEG_SRC/configure" "${CONFIGURE_FLAGS[@]}" | tee configure.log
 
 echo "Building..."
 make -j"$(sysctl -n hw.ncpu)" ffmpeg ffprobe > make.log 2>&1 || {
@@ -124,6 +144,53 @@ rm -f "$OUT_DIR/ffmpeg" "$OUT_DIR/ffprobe"
 cp ffmpeg ffprobe "$OUT_DIR/"
 chmod 755 "$OUT_DIR/ffmpeg" "$OUT_DIR/ffprobe"
 
+# ---- what the LGPL asks to travel with the binaries ----
+VERSION="$(tr -d '[:space:]' < "$FFMPEG_SRC/RELEASE")"
+COMMIT="$(git -C "$FFMPEG_SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+CONFIG_LINE="./configure ${CONFIGURE_FLAGS[*]}"
+SOURCE_NAME="ffmpeg-$VERSION-source.tar.xz"
+
+cp "$FFMPEG_SRC/COPYING.LGPLv2.1" "$OUT_DIR/COPYING.LGPLv2.1"
+cat > "$OUT_DIR/FFMPEG-NOTICE.txt" <<NOTICE
+FFmpeg in Bulk Audio Normalizer for macOS
+
+This software uses code of FFmpeg (https://ffmpeg.org), licensed under the
+GNU Lesser General Public License, version 2.1 or later. Its source can be
+downloaded from the release page this app came from, as $SOURCE_NAME,
+and from https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz.
+
+The ffmpeg and ffprobe programs next to this file are FFmpeg $VERSION
+(git tag $FFMPEG_TAG, commit $COMMIT), unmodified, built for $ARCH with:
+
+  $CONFIG_LINE
+
+No external libraries are linked in. The full license text is in
+COPYING.LGPLv2.1 next to this file.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+NOTICE
+
+# The exact source that was built, with the configure line at its root.
+if git -C "$FFMPEG_SRC" rev-parse --git-dir > /dev/null 2>&1; then
+    changes="$(git -C "$FFMPEG_SRC" status --porcelain --untracked-files=no)"
+    [ -z "$changes" ] || fail "the FFmpeg checkout has local changes; the source archive must match the build"
+    cat > "$BUILD_DIR/BUILD-INFO.txt" <<INFO
+FFmpeg $VERSION (git tag $FFMPEG_TAG, commit $COMMIT), unmodified.
+
+Built for macOS ($ARCH, macOS $MACOS_MIN or later) by build_ffmpeg_mac.sh in
+https://github.com/rulingAnts/bulk_audio_normalizer (python_webview/), with:
+
+  $CONFIG_LINE
+  make ffmpeg ffprobe
+
+License: GNU Lesser General Public License, version 2.1 or later.
+INFO
+    git -C "$FFMPEG_SRC" archive --format=tar --prefix="ffmpeg-$VERSION/" \
+        --add-file="$BUILD_DIR/BUILD-INFO.txt" HEAD | xz -9 > "$FFMPEG_WORK/$SOURCE_NAME"
+else
+    echo "WARNING: $FFMPEG_SRC is not a git checkout; make $SOURCE_NAME by hand." >&2
+fi
+
 echo ""
 echo "Installed to $OUT_DIR:"
 for bin in ffmpeg ffprobe; do
@@ -132,3 +199,10 @@ for bin in ffmpeg ffprobe; do
     echo "    $(head -1 <<< "$ver")"
 done
 echo "  License: LGPL version 2.1 or later (no GPL, version3 or nonfree parts)"
+echo "  Notices: $OUT_DIR/COPYING.LGPLv2.1, $OUT_DIR/FFMPEG-NOTICE.txt"
+if [ -f "$FFMPEG_WORK/$SOURCE_NAME" ]; then
+    echo ""
+    echo "Source to attach to the release (next to the .dmg):"
+    echo "  $FFMPEG_WORK/$SOURCE_NAME"
+    echo "  sha256 $(shasum -a 256 "$FFMPEG_WORK/$SOURCE_NAME" | cut -d' ' -f1)"
+fi

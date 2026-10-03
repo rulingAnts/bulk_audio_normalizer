@@ -22,8 +22,13 @@ fi
 # Built from FFmpeg's source, not taken from npm: ffmpeg-static's darwin-arm64
 # ffmpeg is a nonfree build that may not be redistributed, and ffprobe-static
 # has no arm64 ffprobe. See build_ffmpeg_mac.sh.
-if [ ! -f "bin/macos/ffmpeg" ] || [ ! -f "bin/macos/ffprobe" ]; then
-    echo "📦 macOS FFmpeg binaries not found. Running build_ffmpeg_mac.sh..."
+# The license text and notice must ship with them (the LGPL asks for it).
+need_ffmpeg=0
+for f in ffmpeg ffprobe COPYING.LGPLv2.1 FFMPEG-NOTICE.txt; do
+    [ -f "bin/macos/$f" ] || need_ffmpeg=1
+done
+if [ "$need_ffmpeg" = 1 ]; then
+    echo "📦 macOS FFmpeg binaries or their license files not found. Running build_ffmpeg_mac.sh..."
     ./build_ffmpeg_mac.sh
 fi
 

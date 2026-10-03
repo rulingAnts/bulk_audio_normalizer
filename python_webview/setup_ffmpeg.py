@@ -26,7 +26,17 @@ def main():
     bin_dir.mkdir(exist_ok=True)
     
     system = platform.system()
-    
+
+    # Never on macOS: ffmpeg-static's darwin-arm64 ffmpeg is configured with
+    # --enable-nonfree ("ffmpeg -L" says it is not legally redistributable),
+    # and ffprobe-static has no arm64 ffprobe. build_ffmpeg_mac.sh builds an
+    # LGPL ffmpeg and ffprobe from FFmpeg's source instead.
+    if system == 'Darwin':
+        print("On macOS, run ./build_ffmpeg_mac.sh instead of this script.")
+        print("The npm package's macOS ffmpeg is a nonfree build that may not be")
+        print("passed on; build_ffmpeg_mac.sh builds an LGPL one from FFmpeg's source.")
+        return 1
+
     # Create platform-specific directory
     if system == 'Darwin':
         platform_dir = bin_dir / 'macos'
