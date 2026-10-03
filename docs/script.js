@@ -45,10 +45,11 @@ releaseList.catch(() => {});
       const rel = document.getElementById('release-page-link');
       const rel2 = document.getElementById('release-page-link-footer');
 
-      // Display tag name in buttons if available
+      // Display tag name in buttons if available (the Mac label only when this release
+      // really has a .dmg; otherwise it is set below, from the release the button points to)
       const tag = release.tag_name || release.name || '';
       if (tag) {
-        if (macLink) macLink.textContent = `Download macOS (${tag})`;
+        if (macLink && macAsset) macLink.textContent = `Download macOS (${tag})`;
         if (winLink) winLink.textContent = `Download Windows (${tag})`;
       }
 
@@ -87,7 +88,10 @@ releaseList.catch(() => {});
 
       // Ensure we still have a working path: a button with no asset goes to a releases page
       // (href is "#" in index.html until a download is found).
-      if (!macFound && macLink) enable(macLink, `https://github.com/${owner}/${repo}/releases`);
+      if (!macFound && macLink) {
+        enable(macLink, `https://github.com/${owner}/${repo}/releases`);
+        macLink.textContent = 'macOS: see all releases';
+      }
       if (!winAsset && winLink) enable(winLink, latest);
     } catch (e) {
       fallbackAll();
@@ -101,8 +105,9 @@ releaseList.catch(() => {});
   }
 })();
 
-// Pre-release notice. The main buttons above always use releases/latest, which never
-// returns a pre-release. This only updates the notice under them: it points at the newest
+// Pre-release notice. The Windows button above uses releases/latest, which never returns a
+// pre-release; the Mac button falls back to the newest release with a .dmg, pre-releases
+// included. This only updates the notice under them: it points at the newest
 // published pre-release that is newer than the latest full release, and hides the notice
 // when there is none (e.g. once that pre-release has been promoted), so the site never
 // advertises a stale pre-release. If the API cannot be reached, the notice stays as
