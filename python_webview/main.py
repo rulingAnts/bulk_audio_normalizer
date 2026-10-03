@@ -126,6 +126,20 @@ def reveal_in_file_manager(file_path) -> bool:
         return False
 
 
+def folder_dialog_type():
+    """
+    pywebview's folder-dialog type: FileDialog.FOLDER (pywebview 6.0+).
+
+    The old webview.FOLDER_DIALOG constant still works in 6.x but logs a
+    deprecation warning each time and is to be removed. requirements.txt
+    allows pywebview 5.x, which has only FOLDER_DIALOG, so fall back to it.
+    """
+    file_dialog = getattr(webview, 'FileDialog', None)
+    if file_dialog is not None:
+        return file_dialog.FOLDER
+    return webview.FOLDER_DIALOG
+
+
 def subfolder_inside(folder: str, parent: str) -> Optional[str]:
     """
     folder's path relative to parent when folder is inside parent, else None.
@@ -182,7 +196,7 @@ class API:
     def select_folder(self, title='Select Folder'):
         """Show folder selection dialog."""
         result = webview.windows[0].create_file_dialog(
-            dialog_type=webview.FOLDER_DIALOG,
+            dialog_type=folder_dialog_type(),
             directory='',
             allow_multiple=False
         )

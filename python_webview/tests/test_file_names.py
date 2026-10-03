@@ -34,6 +34,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -438,6 +439,21 @@ class NestedOutputTests(unittest.TestCase):
 
         calls, _ = self.run_worker(fake, str(self.out_dir))
         self.assertEqual(calls[-1], ('triggerError', [main.not_written_message([BLACKBRIX], 2)]))
+
+
+class FolderDialogTests(unittest.TestCase):
+
+    def test_folder_dialog_type(self):
+        new = types.SimpleNamespace(FileDialog=types.SimpleNamespace(FOLDER=20))
+        with mock.patch.object(main, 'webview', new):
+            self.assertEqual(main.folder_dialog_type(), 20)
+        with mock.patch.object(main, 'webview', types.SimpleNamespace(FOLDER_DIALOG=20)):  # pywebview 5.x
+            self.assertEqual(main.folder_dialog_type(), 20)
+
+    @unittest.skipUnless(hasattr(main.webview, 'FileDialog'), 'pywebview 6+ not installed')
+    def test_installed_pywebview_gives_no_deprecation_warning(self):
+        with self.assertNoLogs('pywebview', level='WARNING'):
+            self.assertEqual(int(main.folder_dialog_type()), 20)
 
 
 class StrictLogStreamTests(unittest.TestCase):
