@@ -441,6 +441,81 @@ class NestedOutputTests(unittest.TestCase):
         self.assertEqual(calls[-1], ('triggerError', [main.not_written_message([BLACKBRIX], 2)]))
 
 
+class FakeProc:
+    """What process_manager.spawn returns, as far as normalize_file uses it."""
+
+    def __init__(self, returncode, stderr=b''):
+        self.returncode, self.stderr, self.pid = returncode, stderr, None
+
+    def communicate(self, timeout=None):
+        return b'', self.stderr
+
+    def poll(self):
+        return self.returncode
+
+
+class CancelTests(unittest.TestCase):
+    """Cancel/pause are hidden in the UI today; these keep their plumbing honest."""
+
+    def setUp(self):
+        self.addCleanup(setattr, main.process_manager, 'cancel_all', False)
+        self.addCleanup(setattr, main, 'main_window', main.main_window)
+
+    def test_a_render_killed_by_cancel_is_not_completed(self):
+        from backend.audio_processor import normalize_file
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / BLACKBRIX, Path(tmp) / 'out' / BLACKBRIX
+            write_wav(src, seconds=0.1)
+            out.parent.mkdir()
+
+            def spawn(cmd, job_id=None, **kwargs):
+                if cmd[-1] == str(out):  # the render, killed half way
+                    out.write_bytes(b'RIFF cut short')
+                    main.process_manager.cancel_all = True
+                    return FakeProc(1, b'Exiting normally, received signal 2.')
+                return FakeProc(0, b'[Parsed_volumedetect_0] max_volume: -6.0 dB')
+
+            logs = []
+            with mock.patch.object(main.process_manager, 'spawn', side_effect=spawn):
+                ok = normalize_file(str(src), str(out), {}, 'j', lambda *a: None, lambda *a: logs.append(a))
+            self.assertIsNone(ok)
+            self.assertEqual(logs[-1], ('j', 'render', 'Canceled'))
+            self.assertFalse(out.exists())
+
+    def test_a_canceled_file_is_not_marked_done_and_stopped_is_sent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            in_dir, out_dir = Path(tmp) / 'in', Path(tmp) / 'out'
+            in_dir.mkdir()
+            out_dir.mkdir()
+            (in_dir / BLACKBRIX).write_bytes(b'RIFF')
+
+            def fake(input_path, output_path, settings, job_id, progress_cb, log_cb):
+                main.processing_state['running'] = False  # what cancel_processing does
+                main.process_manager.kill_all()
+                return None
+
+            w = FakeWindow()
+            main.main_window = w
+            main.processing_state.update(running=True, paused=False, total_files=0)
+            main.processing_state['processed_files'].clear()
+            with mock.patch.object(main, 'normalize_file', side_effect=fake):
+                main.API()._process_batch_worker(str(in_dir), str(out_dir), {})
+        fns = [parse_call(s)[0] for s in w.scripts]
+        self.assertEqual(fns, ['triggerBatchStart', 'triggerFileStart', 'triggerStopped'])
+
+    def test_the_cancel_flag_is_reset_for_the_next_batch_and_on_resume(self):
+        api = main.API()
+        with mock.patch.object(main.threading, 'Thread'):
+            main.process_manager.cancel_all = True
+            self.assertTrue(api.start_processing('in', 'out', {})['ok'])
+            self.assertFalse(main.process_manager.is_canceled())
+            api.pause_processing()
+            self.assertTrue(main.process_manager.is_canceled())
+            api.resume_processing()
+            self.assertFalse(main.process_manager.is_canceled())
+        main.processing_state.update(running=False, paused=False)
+
+
 class FolderDialogTests(unittest.TestCase):
 
     def test_folder_dialog_type(self):

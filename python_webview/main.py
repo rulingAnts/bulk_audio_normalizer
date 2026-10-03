@@ -299,6 +299,7 @@ class API:
         processing_state['processed_files'].clear()
         processing_state['total_files'] = 0
         processing_state['settings'] = settings
+        process_manager.reset_cancel()
         
         logger.info("Starting background thread...")
         # Start processing in background thread
@@ -331,6 +332,7 @@ class API:
     def resume_processing(self):
         """Resume paused batch processing."""
         logger.info("Resuming batch processing...")
+        process_manager.reset_cancel()  # pause killed FFmpeg through kill_all
         processing_state['paused'] = False
         return {'ok': True}
     
@@ -383,6 +385,7 @@ class API:
         
         # Store preview state
         processing_state['preview_running'] = True
+        process_manager.reset_cancel()
         processing_state['preview_tmp'] = tmp_base
         
         # Start preview processing in background
@@ -445,9 +448,7 @@ class API:
             for file_path in wav_files:
                 # Check for stop
                 if not processing_state['running']:
-                    logger.info("Processing stopped by user")
-                    js_call(main_window, 'triggerStopped')
-                    break
+                    break  # stopped by the user; reported after the loop
                 
                 # Check for pause
                 while processing_state['paused']:
@@ -482,7 +483,15 @@ class API:
                     def log_cb(job_id, phase, message):
                         js_call(main_window, 'triggerLog', job_id, phase, message)
 
-                    ok = normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                    try:
+                        ok = normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                    finally:
+                        process_manager.cleanup_job(file_id)  # forget the finished FFmpeg processes
+
+                    if ok is None and process_manager.is_canceled():
+                        # Canceled (or paused) mid-file: neither written nor failed.
+                        logger.info(f"Canceled: {file_name}")
+                        continue
 
                     # Mark file as processed
                     processing_state['processed_files'].add(file_path)
@@ -509,8 +518,13 @@ class API:
 
             if failed:
                 logger.info(f"Batch stopped after an error: {completed}/{total} files processed")
+            elif not processing_state['running']:
+                # Also when the stop came during the last file, which the
+                # check at the top of the loop never saw.
+                logger.info("Processing stopped by user")
+                js_call(main_window, 'triggerStopped')
             # Processing complete - verify all files
-            elif processing_state['running'] and not processing_state['paused']:
+            elif not processing_state['paused']:
                 logger.info(f"Batch processing complete: {completed}/{total} files")
                 logger.info("Verifying output files...")
                 
@@ -600,7 +614,10 @@ class API:
                         logger.debug(f"Preview {job_id} {phase}: {message}")
                     
                     logger.info(f"Calling normalize_file for {file_id}...")
-                    ok = normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                    try:
+                        ok = normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                    finally:
+                        process_manager.cleanup_job(file_id)
                     logger.info(f"normalize_file completed for {file_id}")
 
                     # Verify output file was created

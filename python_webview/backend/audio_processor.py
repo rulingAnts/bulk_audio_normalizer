@@ -460,7 +460,15 @@ def normalize_file(input_path: str, output_path: str, settings: Dict,
     _, stderr = proc.communicate()
 
     progress_callback(job_id, 'render', 'done', 100)
-    if proc.returncode != 0 and not process_manager.is_canceled():
+    if proc.returncode != 0 and process_manager.is_canceled():
+        # Killed by cancel or pause: whatever FFmpeg left is cut short.
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+        log_callback(job_id, 'render', 'Canceled')
+        return None
+    if proc.returncode != 0:
         # Say so instead of "Completed": the caller reports the file at the end.
         reason = ffmpeg_error_tail(stderr)
         logger.error(f"FFmpeg failed (exit code {proc.returncode}) for {input_path}: {reason}")

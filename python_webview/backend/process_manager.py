@@ -137,6 +137,14 @@ class ProcessManager:
             self.kill_job(job_id)
         logger.info("Killed all processes")
         
+    def reset_cancel(self) -> None:
+        """
+        Clear the flag kill_all sets. Called when a batch or preview starts
+        and on resume; otherwise one cancel made every later file return
+        at once, unprocessed.
+        """
+        self.cancel_all = False
+
     def cleanup_job(self, job_id: str) -> None:
         """
         Clean up finished processes for a job.
