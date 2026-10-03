@@ -37,15 +37,21 @@ STATIC = HERE / 'licenses'
 OUT = HERE / 'build' / 'licenses'
 REPO_URL = 'https://github.com/rulingAnts/bulk_audio_normalizer'
 
-# Installed for building only; PyInstaller does not put them in the app.
+# Build tools that PyInstaller never puts in the app. Everything else installed is listed:
+# what gets bundled varies by platform (on Windows, setuptools and packaging are bundled),
+# and listing a package that was not bundled is harmless, while missing one is not.
 BUILD_ONLY = {
-    'pip', 'setuptools', 'wheel', 'pyinstaller', 'pyinstaller-hooks-contrib', 'altgraph',
-    'macholib', 'packaging', 'pefile', 'pywin32-ctypes',
+    'pip', 'pyinstaller', 'pyinstaller-hooks-contrib', 'altgraph', 'macholib', 'pefile',
+    'pywin32-ctypes',
 }
+# Where the license text says something other than the package metadata.
+LICENSE_NOTE = {'proxy-tools': 'BSD, per its LICENSE.txt (its metadata says MIT)'}
 # License texts kept in licenses/ for packages that ship none.
 STATIC_FOR = {'proxy-tools': 'proxy_tools.txt', 'pythonnet': 'pythonnet.txt',
               'clr-loader': 'clr_loader.txt'}
-LICENSE_NAME = re.compile(r'(^|/)(LICEN[CS]E|COPYING|NOTICE|AUTHORS)[^/]*$', re.IGNORECASE)
+# License-like file names, also inside the package (e.g. pywebview's
+# webview/lib/Microsoft.Web.WebView2.LICENSE.md, setuptools' vendored packages).
+LICENSE_NAME = re.compile(r'(^|/)[^/]*(LICEN[CS]E|COPYING|NOTICE|AUTHORS)[^/]*$', re.IGNORECASE)
 TEXT_SUFFIXES = {'', '.txt', '.md', '.rst', '.apache', '.bsd', '.mit', '.psf'}
 
 RULE = '=' * 78
@@ -61,7 +67,7 @@ def license_files(dist: md.Distribution) -> list[Path]:
         s = str(f)
         if not LICENSE_NAME.search(s) or Path(s).suffix.lower() not in TEXT_SUFFIXES:
             continue
-        if '_vendor/' in s or '.dSYM/' in s:
+        if '.dSYM/' in s:
             continue
         path = Path(dist.locate_file(f))
         if path.is_file():
@@ -117,23 +123,31 @@ def main() -> int:
     parts = [
         'Third-party licenses for the software bundled inside Bulk Audio Normalizer\n'
         f'(built on {platform.system()} {platform.machine()} with Python {platform.python_version()}).\n'
-        'FFmpeg is listed in THIRD_PARTY_NOTICES.md; its license travels next to ffmpeg.\n\n'
+        'FFmpeg is listed in THIRD_PARTY_NOTICES.md; its license travels next to ffmpeg.\n'
+        'Every package installed in the build environment is listed except pure build tools, so a\n'
+        'few entries may be for packages the app does not actually include.\n\n'
     ]
     parts.append(section(f'Python {platform.python_version()} (the Python runtime)',
                          python_license().read_text(encoding='utf-8', errors='replace')))
+    major_minor = f'{sys.version_info[0]}.{sys.version_info[1]}'
+    incorporated = STATIC / f'python-{major_minor}-incorporated-software.txt'
+    if not incorporated.is_file():
+        sys.exit(f'{incorporated.name} missing: add the "Licenses and Acknowledgements for '
+                 f'Incorporated Software" section of CPython {major_minor}\'s Doc/license.rst')
     parts.append(section('Software incorporated in Python (OpenSSL, expat, libffi, zlib, libmpdec, ...)',
-                         (STATIC / 'python-incorporated-software.txt').read_text(encoding='utf-8')))
+                         incorporated.read_text(encoding='utf-8')))
     if sys.platform == 'darwin':
         parts.append(section('ncurses (bundled with the python.org macOS Python)',
                              (STATIC / 'ncurses.txt').read_text(encoding='utf-8')))
     if sys.platform == 'win32':
         parts.append(section('Microsoft runtime files (Windows)', (
-            'vcruntime140.dll / vcruntime140_1.dll: the Microsoft Visual C++ runtime, which\n'
-            'Python for Windows ships and which is redistributable under the Visual Studio\n'
-            'license terms (https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files).\n\n'
-            'Microsoft.Web.WebView2.*.dll and WebView2Loader.dll (inside pywebview): the Microsoft\n'
-            'Edge WebView2 SDK, redistributable under its license\n'
-            '(https://www.nuget.org/packages/Microsoft.Web.WebView2, "License" link).')))
+            'vcruntime140.dll / vcruntime140_1.dll (the Microsoft Visual C++ runtime) and\n'
+            'ucrtbase.dll / api-ms-win-*.dll (the Universal C Runtime): Microsoft runtime files that\n'
+            'Python for Windows ships, redistributable with applications under Microsoft\'s terms\n'
+            '(https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files and\n'
+            'https://learn.microsoft.com/cpp/windows/universal-crt-deployment).\n\n'
+            'Microsoft.Web.WebView2.*.dll (inside pywebview): the Microsoft Edge WebView2 SDK; its\n'
+            'license is in the pywebview section below (Microsoft.Web.WebView2.LICENSE.md).')))
 
     pyinstaller = md.distribution('pyinstaller')
     parts.append(section(
@@ -148,7 +162,9 @@ def main() -> int:
             continue
         meta_license = dist.metadata.get('License-Expression') or dist.metadata.get('License') or ''
         head = f'{name} {dist.version}'
-        if meta_license and '\n' not in meta_license.strip():
+        if norm(name) in LICENSE_NOTE:
+            head += f'  (license: {LICENSE_NOTE[norm(name)]})'
+        elif meta_license and '\n' not in meta_license.strip():
             head += f'  (license: {meta_license.strip()})'
         home = dist.metadata.get('Home-page') or ''
         files = license_files(dist)
@@ -162,6 +178,8 @@ def main() -> int:
         else:
             missing.append(head)
             continue
+        if norm(name) == 'pywebview':
+            body += '\n\n' + (STATIC / 'pywebview-js.txt').read_text(encoding='utf-8')
         if home:
             body = f'{home}\n\n{body}'
         parts.append(section(head, body))
