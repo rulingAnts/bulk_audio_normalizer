@@ -126,6 +126,44 @@ def reveal_in_file_manager(file_path) -> bool:
         return False
 
 
+def subfolder_inside(folder: str, parent: str) -> Optional[str]:
+    """
+    folder's path relative to parent when folder is inside parent, else None.
+
+    None too when they are the same folder. Links are resolved and names are
+    compared the way the OS does (normcase), so "C:\\Music\\Normalized\\" is
+    inside "c:\\music". The result is normcased.
+    """
+    try:
+        f = os.path.normcase(os.path.realpath(folder))
+        p = os.path.normcase(os.path.realpath(parent))
+        if f != p and os.path.commonpath([f, p]) == p:
+            return os.path.relpath(f, p)
+    except (ValueError, OSError):  # e.g. different drives on Windows
+        pass
+    return None
+
+
+def without_output_folder(files: List[str], input_path: str, output_path: str) -> List[str]:
+    """
+    The scanned input files minus any inside the output folder.
+
+    The UI only refuses an output folder that IS the input folder; an empty
+    one inside it ("Music" -> "Music/normalized") is allowed. What is, or
+    will be, written there is output, never input.
+    """
+    sub = subfolder_inside(output_path, input_path) if output_path else None
+    if not sub:
+        return files
+    prefix = sub + os.sep
+    kept = []
+    for f in files:
+        rel = os.path.normcase(os.path.relpath(f, input_path))
+        if rel != sub and not rel.startswith(prefix):
+            kept.append(f)
+    return kept
+
+
 def not_written_message(rel_paths: List[str], total: int, limit: int = 5) -> str:
     """The end-of-batch error for files FFmpeg could not write, naming a few."""
     names = ', '.join(rel_paths[:limit])
@@ -356,8 +394,8 @@ class API:
         try:
             logger.info(f"Batch worker started: input_path={input_path}, output_path={output_path}")
             
-            # Scan for files
-            wav_files = self.scan_files(input_path)
+            # Scan for files (never inside an output folder that sits in the input folder)
+            wav_files = without_output_folder(self.scan_files(input_path), input_path, output_path)
             logger.info(f"Found {len(wav_files)} WAV files")
             
             # Filter out already processed files (for resume)
@@ -462,8 +500,10 @@ class API:
                 logger.info(f"Batch processing complete: {completed}/{total} files")
                 logger.info("Verifying output files...")
                 
-                # Verify all files were processed
-                verification_results = self._verify_batch_output(input_path, output_path)
+                # Verify the files this batch set out to process (not a rescan:
+                # the outputs may now be inside the input folder).
+                batch_files = sorted(set(wav_files) | processing_state['processed_files'])
+                verification_results = self._verify_batch_output(input_path, output_path, batch_files)
                 problems = sorted(set(not_written) | set(verification_results['missing_files']))
 
                 if problems:
@@ -482,9 +522,13 @@ class API:
                 processing_state['processed_files'].clear()
                 processing_state['total_files'] = 0
     
-    def _verify_batch_output(self, input_path: str, output_path: str) -> Dict:
+    def _verify_batch_output(self, input_path: str, output_path: str, input_files: List[str]) -> Dict:
         """
-        Check that every input file has a non-empty output file.
+        Check that each of input_files has a non-empty output file.
+
+        input_files are the files the batch processed. The input folder is
+        not scanned again: an output folder inside it would by now hold the
+        outputs, and they would be taken for inputs without outputs.
 
         Until v2.0.2 this imported a get_audio_info that never existed, so
         the ImportError was swallowed and verification passed without
@@ -492,7 +536,7 @@ class API:
         """
         results = {'matched': 0, 'missing': 0, 'missing_files': []}
         try:
-            for input_file in self.scan_files(input_path):
+            for input_file in input_files:
                 rel_path = os.path.relpath(input_file, input_path)
                 output_file = os.path.join(output_path, rel_path)
                 try:

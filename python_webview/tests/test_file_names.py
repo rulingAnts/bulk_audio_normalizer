@@ -341,6 +341,89 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(ffmpeg_error_tail(b''), 'no error message')
 
 
+class NestedOutputTests(unittest.TestCase):
+    """
+    An output folder inside the input folder.
+
+    The UI only refuses the very same folder, and an empty subfolder passes
+    validate_output_empty, so "Music" -> "Music/normalized" is allowed. The
+    outputs written there must never be taken for inputs: not while the batch
+    runs, and not by the check at the end (v2.0.2 pre-review: every file was
+    reported as not written because that check rescanned the input folder).
+    """
+
+    NAMES = ["07 Johnny Don't Go.wav", BLACKBRIX]
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.in_dir = Path(tmp.name) / 'nested' / 'Music'
+        self.out_dir = self.in_dir / 'normalized'
+        self.out_dir.mkdir(parents=True)
+        for name in self.NAMES:
+            (self.in_dir / name).write_bytes(b'RIFF')
+        self.addCleanup(setattr, main, 'main_window', main.main_window)
+
+    def run_worker(self, fake, out_dir):
+        w = FakeWindow()
+        main.main_window = w
+        main.processing_state.update(running=True, paused=False, total_files=0)
+        main.processing_state['processed_files'].clear()
+        with mock.patch.object(main, 'normalize_file', side_effect=fake) as nf:
+            main.API()._process_batch_worker(str(self.in_dir), out_dir, {})
+        return [parse_call(s) for s in w.scripts], nf
+
+    @staticmethod
+    def write_output(input_path, output_path, settings, job_id, progress_cb, log_cb):
+        Path(output_path).write_bytes(b'RIFF')
+        return True
+
+    def check_all_done(self, calls, nf):
+        self.assertNotIn('triggerError', [fn for fn, _ in calls])
+        self.assertEqual(calls[-1], ('triggerAllDone', []))
+        started = [args[0] for fn, args in calls if fn == 'triggerFileStart']
+        self.assertEqual(sorted(started), sorted(self.NAMES))
+        self.assertEqual(nf.call_count, len(self.NAMES))
+        for name in self.NAMES:
+            self.assertTrue((self.out_dir / name).is_file(), name)
+        self.assertFalse((self.out_dir / 'normalized').exists())
+
+    def test_outputs_are_not_reported_or_processed_as_inputs(self):
+        # validate_output_empty ignores dot names, so this can be there at the start.
+        (self.out_dir / '.left over.wav').write_bytes(b'RIFF')
+        self.assertTrue(main.API().validate_output_empty(str(self.out_dir)))
+        self.check_all_done(*self.run_worker(self.write_output, str(self.out_dir)))
+
+    def test_output_path_with_a_trailing_separator(self):
+        self.check_all_done(*self.run_worker(self.write_output, str(self.out_dir) + os.sep))
+
+    def test_output_folder_next_to_the_input_is_unaffected(self):
+        sibling = self.in_dir.parent / 'Music normalized'
+        sibling.mkdir()
+        self.out_dir = sibling
+        self.check_all_done(*self.run_worker(self.write_output, str(sibling)))
+
+    def test_subfolder_inside(self):
+        music, out = str(self.in_dir), str(self.out_dir)
+        self.assertEqual(main.subfolder_inside(out, music), os.path.normcase('normalized'))
+        self.assertEqual(main.subfolder_inside(out + os.sep, music + os.sep), os.path.normcase('normalized'))
+        self.assertIsNone(main.subfolder_inside(music, music))   # same folder: the UI refuses it
+        self.assertIsNone(main.subfolder_inside(music, out))     # input inside output
+        self.assertIsNone(main.subfolder_inside(str(self.in_dir.parent / 'Music2'), music))
+        files = [str(self.in_dir / n) for n in self.NAMES] + [str(self.out_dir / 'x.wav')]
+        self.assertEqual(main.without_output_folder(files, music, out), files[:2])
+        self.assertEqual(main.without_output_folder(files, music, music), files)
+
+    def test_an_output_that_was_not_written_is_still_reported(self):
+        def fake(input_path, output_path, settings, job_id, progress_cb, log_cb):
+            if job_id != BLACKBRIX:
+                Path(output_path).write_bytes(b'RIFF')
+            return True
+
+        calls, _ = self.run_worker(fake, str(self.out_dir))
+        self.assertEqual(calls[-1], ('triggerError', [main.not_written_message([BLACKBRIX], 2)]))
+
+
 class StrictLogStreamTests(unittest.TestCase):
     """A log stream that cannot encode a name must not stop the batch."""
 
@@ -469,6 +552,13 @@ class EndToEndNameTests(unittest.TestCase):
         # loudnorm analysis + render
         self.check_batch(self.run_batch({'normMode': 'lufs', 'verboseLogs': True,
                                          'targetBitDepth': 'original'}))
+
+    def test_batch_into_an_output_folder_inside_the_input_folder(self):
+        # "Music" -> "Music/normalized": allowed by the UI when it is empty.
+        self.out_dir = self.in_dir / 'normalized #1 ö'
+        self.out_dir.mkdir()
+        self.check_batch(self.run_batch({}))
+        self.assertFalse((self.out_dir / 'normalized #1 ö').exists())
 
     def test_unreadable_file_is_reported_and_the_rest_are_written(self):
         bad = 'bad #1 ' + BLACKBRIX
