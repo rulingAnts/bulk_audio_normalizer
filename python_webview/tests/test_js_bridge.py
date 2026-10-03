@@ -10,7 +10,8 @@ Run from the repository root:
     python3 -m unittest discover -s python_webview/tests -v
 
 Needs only the standard library. The node checks run when `node` is on PATH;
-the end-to-end ffmpeg run happens when `ffmpeg` and `ffprobe` are on PATH.
+the end-to-end ffmpeg run happens when the app finds ffmpeg and ffprobe (its
+own bin/<platform>/ folder first, then PATH, as in the built app).
 """
 import json
 import math
@@ -72,7 +73,18 @@ TRICKY_STRINGS = [
 CALL_RE = re.compile(r'^window\.([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$', re.DOTALL)
 
 NODE = shutil.which('node')
-FFMPEG_READY = bool(shutil.which('ffmpeg') and shutil.which('ffprobe'))
+
+
+def _app_ffmpeg_paths():
+    """The ffmpeg/ffprobe the app itself would run, or None."""
+    try:
+        return main.get_ffmpeg_path(), main.get_ffprobe_path()
+    except RuntimeError:
+        return None
+
+
+FFMPEG_PATHS = _app_ffmpeg_paths()
+FFMPEG_READY = FFMPEG_PATHS is not None
 
 
 class FakeWindow:
@@ -114,8 +126,9 @@ const sources = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 globalThis.window = globalThis;
 let last = null;
 const names = ['triggerFileStart', 'triggerBatchStart', 'triggerFileDone',
-  'triggerAllDone', 'triggerStopped', 'triggerError', 'triggerProgress',
-  'triggerLog', 'triggerPhaseEvent', 'triggerUnderTest'];
+  'triggerFileFailed', 'triggerAllDone', 'triggerStopped', 'triggerError',
+  'triggerProgress', 'triggerLog', 'triggerPhaseEvent', 'triggerPreviewFile',
+  'triggerPreviewDone', 'triggerUnderTest'];
 for (const n of names) {
   window[n] = function () { last = { fn: n, args: Array.from(arguments) }; };
 }
@@ -346,7 +359,7 @@ class BatchWorkerTests(unittest.TestCase):
         self.assertIn('ffmpeg exited with code 1', args[0])
 
 
-@unittest.skipUnless(FFMPEG_READY, 'ffmpeg/ffprobe not on PATH')
+@unittest.skipUnless(FFMPEG_READY, 'the app finds no ffmpeg/ffprobe')
 class EndToEndFfmpegTests(unittest.TestCase):
     """Real normalize_file on tiny WAVs whose names broke v2.0.1."""
 
