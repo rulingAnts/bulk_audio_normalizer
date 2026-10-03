@@ -30,6 +30,8 @@ a:hover, a:focus { text-decoration: underline; }
 .btn:not(.disabled):hover { transform: translateY(-2px); }
 .btn:focus-visible { outline: var(--focus); }
 .small { font-size: .8rem; color: var(--muted); }
+.prerelease-notice { max-width: 40rem; margin: .9rem auto 0; padding: .6rem .9rem; font-size: .9rem; color: var(--text); background: rgba(217,119,6,.12); border: 1px solid rgba(217,119,6,.55); border-radius: var(--radius); }
+.prerelease-notice[hidden] { display: none; }
 main section { padding: 2rem 0; }
 .grid.two { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); align-items: start; }
 .accent { background: var(--bg-alt); }

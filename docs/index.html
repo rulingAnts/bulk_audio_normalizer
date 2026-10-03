@@ -21,6 +21,13 @@
         <a id="download-win" class="btn secondary disabled" href="#" aria-disabled="true">Download for Windows (Portable EXE)</a>
       </div>
       <p class="small">If the buttons are disabled, visit the <a id="release-page-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/latest">latest releases page</a>.</p>
+      <!-- Pre-release notice. Without JavaScript it stays as written; script.js points it at the
+           newest pre-release that is newer than the latest full release, or hides it when there is none. -->
+      <p id="prerelease-notice" class="prerelease-notice">
+        <strong>Testing a fix?</strong>
+        A <a id="prerelease-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2">pre-release (<span id="prerelease-tag">v2.0.2</span>)<span id="prerelease-platforms"> for Windows</span></a>
+        is available — it still needs testing.<span id="prerelease-direct" hidden> <a id="prerelease-exe" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2">Download the .exe directly</a>.</span>
+      </p>
     </div>
   </header>
 
