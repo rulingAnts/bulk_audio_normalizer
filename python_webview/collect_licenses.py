@@ -43,7 +43,8 @@ BUILD_ONLY = {
     'macholib', 'packaging', 'pefile', 'pywin32-ctypes',
 }
 # License texts kept in licenses/ for packages that ship none.
-STATIC_FOR = {'proxy-tools': 'proxy_tools.txt'}
+STATIC_FOR = {'proxy-tools': 'proxy_tools.txt', 'pythonnet': 'pythonnet.txt',
+              'clr-loader': 'clr_loader.txt'}
 LICENSE_NAME = re.compile(r'(^|/)(LICEN[CS]E|COPYING|NOTICE|AUTHORS)[^/]*$', re.IGNORECASE)
 TEXT_SUFFIXES = {'', '.txt', '.md', '.rst', '.apache', '.bsd', '.mit', '.psf'}
 

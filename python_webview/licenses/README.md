@@ -10,6 +10,8 @@ parts that ship none:
 - `ncurses.txt`: ncurses' `COPYING` (the python.org macOS Python bundles libncursesw).
 - `pyobjc.txt`: PyObjC's MIT license; several pyobjc-framework-* wheels ship no copy.
 - `proxy_tools.txt`: proxy_tools' `LICENSE.txt` (BSD); its wheel ships none.
+- `pythonnet.txt`, `clr_loader.txt`: their `LICENSE` files (MIT); on Windows pywebview uses
+  them, and their wheels ship none.
 
 If a new dependency ships no license file, `collect_licenses.py` stops the build: add its
 text here and its name to `STATIC_FOR` in `collect_licenses.py`.
