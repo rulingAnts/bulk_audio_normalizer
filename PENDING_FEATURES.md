@@ -1,47 +1,45 @@
 # Pending Features & Work Items
 
-## v2.0.2 (the issue #2 fix) through a Windows x64 build workflow
+## v2.0.2: published as a pre-release on 2026-10-03 — what is left
 
-**Status (2026-10-03):** the workflow is written (`.github/workflows/build-windows.yml`) and the
-follow-up fixes for every Windows-legal character in file names are on `dev`, with tests. Not yet
-run on GitHub: it runs when the `v2.0.2` tag is pushed. Release notes: `release-notes/v2.0.2.md`.
-The website links to the pre-release from the `site-prerelease-link` branch (for `main`). Still to
-do: confirm on a real Windows PC (issue #2), then Seth promotes it and attaches the macOS `.dmg`.
-- Merge `site-prerelease-link` into `main` only once the v2.0.2 release exists; until then the
-  notice's link (what visitors without JavaScript get) is a 404.
-- **When v2.0.2 is promoted to a full release, delete `#prerelease-notice` from `docs/index.html`.**
-  `docs/script.js` hides it once no newer pre-release exists, but visitors without JavaScript, and
-  anyone the GitHub API rate-limits (60 requests an hour per IP; the page makes 2), still see the
-  static "v2.0.2 pre-release" text.
-(Paused 2026-10-02, resumed 2026-10-03; the notes below are the original brief.)
+**Status:** the `v2.0.2` tag built on GitHub Actions (run 37088902886): 48/48 tests passed on Windows
+with real FFmpeg and BlackBrix's file names, and the portable x64 `Bulk.Audio.Normalizer.exe`
+(64 MB, PE32+ x86-64 GUI) is on the **pre-release**
+https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2. `v2.0.1` is still
+"latest", so the site's main download buttons are unchanged. The home page shows a "Testing a fix?"
+notice linking to the pre-release (`main`, fb03689).
 
-**Asked for:** a GitHub Actions workflow that builds the x64 Windows `.exe` and publishes it as a
-**pre-release**. Seth promotes it to a full release himself after testing the fix.
+**Before promoting v2.0.2 to a full release:**
+- Confirm the fix on a real Windows PC (ask on issue #2; the exe itself is never launched in CI).
+- Build and attach the macOS `.dmg` (`build_mac.sh` + `create_dmg_mac.sh`), or the site's Mac
+  button falls back to the release page.
+- Delete `#prerelease-notice` from `docs/index.html` when you promote it. `docs/script.js` hides it
+  once no newer pre-release exists, but visitors without JavaScript or GitHub API access still see
+  it.
+- Merge `dev` into `main`.
 
-**What the build must match (read from the repo):**
-- **Artifact:** a single **portable** onefile `.exe`, not an installer. `bulk_audio_normalizer.spec`
-  bundles everything into one `EXE(...)` on Windows, and `build_windows.bat` says "Creates a portable
-  .exe". v2.0.1 shipped `Bulk.Audio.Normalizer.exe`; GitHub turned the spaces in
-  `dist/windows/Bulk Audio Normalizer.exe` into dots.
-- **Runner and Python:** `runs-on: windows-latest` with `actions/setup-python` `architecture: x64`.
-  Assert `platform.machine() == 'AMD64'` before building. Then pip install
-  `requirements.txt` + `requirements-build.txt`; consider pinning pywebview, which is unpinned and
-  would pull 6.x.
-- **FFmpeg:** must be in `python_webview/bin/windows/` before PyInstaller runs, and those files are
-  gitignored. `setup_ffmpeg.py` copies them from the npm package `ffmpeg-static` (`npm install`
-  first). Check that the ffmpeg-static Windows binary is x64, and check its licence note in
-  THIRD_PARTY_NOTICES.md.
-- **Tests:** run `python -m unittest discover -s python_webview/tests` before building.
-- **Trigger and release:** a `v*` tag push (plus `workflow_dispatch`). Create a GitHub release with
-  `prerelease: true` and attach the `.exe`.
-- **The website is safe:** `docs/script.js` reads `releases/latest`, which never returns a
-  pre-release. Before promoting to a full release, attach the macOS `.dmg` (`build_mac.sh` +
-  `create_dmg_mac.sh` on Seth's Mac), or the site's Mac button falls back to the release page.
-- **Cost and policy:** free, because the repo is public and `windows-latest` is a standard runner.
-  Seth approved adding it on 2026-10-02. The push needs `ALLOW_WORKFLOW_PUSH=1` (pre-push hook).
-  Work on `dev`; `main` only with Seth's OK. Bump to `v2.0.2` (already in the spec, README and
-  CHANGELOG on `dev`). Reply on issue #2 once the pre-release exists. Workaround meanwhile: rename
-  files to remove the apostrophe.
+**Re-running the build:** push the tag again, or use "Run workflow" once the workflow is on `main`
+(GitHub offers workflow_dispatch only for workflows on the default branch). An existing release
+keeps its notes and pre-release flag; only the exe is replaced.
+
+**Found while reviewing v2.0.2, not fixed (none of them is new in 2.0.2):**
+- **LUFS two-pass almost never runs:** with verbose logs off (the default), the analysis pass runs
+  at `-v error` and loudnorm prints its measurement at info level. Every file falls back to
+  single-pass while the UI says "2-pass (high quality)". Fix: run the analysis pass at
+  `-v info -hide_banner -nostats` whatever the verbose setting.
+- **LUFS output is 192 kHz** (a 16 kHz input came out at 192000 Hz). loudnorm upsamples; keep the
+  input's rate (`-ar` from ffprobe) — this matters for linguistic recordings.
+- **Very short clips (< 0.4 s) measure "-inf" in LUFS mode** and the render fails; they are now
+  listed at the end instead of failing silently.
+- **Pause/resume (buttons hidden today):** the file interrupted by a pause is skipped, not redone,
+  after resume; two small races on that path (a resume between the render returning and the
+  canceled check; `kill_job` vs `cleanup_job` deleting the same key). Fix before showing the
+  buttons again.
+- **Outputs from an earlier batch inside the input folder are processed again** by later batches
+  (only the current batch's output folder is excluded); the preview samples from them too.
+- **Releases ship the exe only:** THIRD_PARTY_NOTICES.md's terms (ship the notice, the AGPL text
+  and the corresponding source, including FFmpeg's) are not met by an exe-only release — same as
+  v2.0.1.
 
 ## 🔥 PRIORITY: Clipped/Chopped Recording Detection Tool
 
