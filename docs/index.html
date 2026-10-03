@@ -28,8 +28,8 @@
            Merge this into main only after the v2.0.2 release exists (until then the link is a 404). -->
       <p id="prerelease-notice" class="prerelease-notice">
         <strong>Testing a fix?</strong>
-        A <a id="prerelease-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2">pre-release (<span id="prerelease-tag">v2.0.2</span>)<span id="prerelease-platforms"> for Windows</span></a>
-        is available — it still needs testing.<span id="prerelease-direct" hidden> <a id="prerelease-exe" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2">Download the .exe directly</a>.</span>
+        A <a id="prerelease-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2">pre-release (<span id="prerelease-tag">v2.0.2</span>)<span id="prerelease-platforms"> for Windows and macOS</span></a>
+        is available — it still needs testing.<span id="prerelease-direct" hidden> Direct downloads: <a id="prerelease-exe" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2" hidden>Windows .exe</a><span id="prerelease-sep" hidden> · </span><a id="prerelease-dmg" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2" hidden>macOS .dmg</a>.</span>
       </p>
     </div>
   </header>
@@ -65,10 +65,11 @@
         <div class="grid two">
           <div>
             <h3>macOS (DMG)</h3>
+            <p class="small">For Macs with Apple silicon (M1 or newer), macOS 11 or later.</p>
             <ol>
               <li>Download the DMG using the button above.</li>
               <li>Open the DMG and drag “Bulk Audio Normalizer” to Applications.</li>
-              <li>First launch: you may need to right‑click → Open and confirm (unsigned app).</li>
+              <li>First launch: macOS says it cannot check the app, because it is not signed with an Apple developer certificate. Open System Settings → Privacy &amp; Security, scroll down and click “Open Anyway”.</li>
             </ol>
           </div>
           <div>
@@ -135,7 +136,11 @@
         </details>
         <details>
           <summary>Do I need to install FFmpeg?</summary>
-          <p>No. The app bundles FFmpeg and FFprobe internally.</p>
+          <p>No. The app comes with its own FFmpeg and FFprobe. The macOS app uses FFmpeg 6.1.6, built from FFmpeg’s source and licensed under the LGPLv2.1; its source is on the same release page as the app. The Windows app uses a GPLv3 build of FFmpeg. Details are in <a href="https://github.com/rulingAnts/bulk_audio_normalizer/blob/main/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</p>
+        </details>
+        <details>
+          <summary>Where did the older macOS downloads go?</summary>
+          <p>On 3 October 2026 we removed the macOS downloads of v1.5.1, v2.0.0 and v2.0.1 (and the v1.5.1 Windows installer). The FFmpeg inside them was a build that we may not pass on. The macOS download of v2.0.2 has an FFmpeg we built ourselves from FFmpeg’s source, which may be shared. A copy you already installed keeps working, but please use v2.0.2 from now on.</p>
         </details>
       </div>
     </section>
