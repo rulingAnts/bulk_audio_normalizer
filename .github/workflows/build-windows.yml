@@ -214,6 +214,10 @@ jobs:
             "licenses/SOURCE.txt=python_webview/build/licenses/SOURCE.txt" `
             "licenses/THIRD-PARTY-LICENSES.txt=python_webview/build/licenses/THIRD-PARTY-LICENSES.txt"
           if (-not (Select-String -LiteralPath python_webview/build/licenses/SOURCE.txt -SimpleMatch $env:GITHUB_SHA -Quiet)) { throw "SOURCE.txt does not name $env:GITHUB_SHA" }
+          # Windows-only parts whose licenses were once missing (asset check, 2026-10-03)
+          foreach ($needle in 'Microsoft.Web.WebView2.Core.dll', 'pythonnet ', 'setuptools ', 'Universal C Runtime') {
+            if (-not (Select-String -LiteralPath python_webview/build/licenses/THIRD-PARTY-LICENSES.txt -SimpleMatch $needle -Quiet)) { throw "THIRD-PARTY-LICENSES.txt lacks $needle" }
+          }
           New-Item -ItemType Directory -Force upload | Out-Null
           Copy-Item -LiteralPath $exe -Destination 'upload/Bulk.Audio.Normalizer.exe'
           Copy-Item ffmpeg-in/source/*.tar.xz upload/

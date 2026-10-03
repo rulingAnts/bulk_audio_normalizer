@@ -9,6 +9,8 @@ parts that ship none:
   `Doc/license.rst` (OpenSSL, expat, libffi, zlib, libmpdec, ...). Python's own `LICENSE.txt`
   does not include it. The macOS build uses 3.11, the Windows build 3.12; a new Python version
   needs its own file.
+- `webview2.txt`: the Microsoft Edge WebView2 SDK license from pywebview's repository (tag
+  6.2.1); pywebview's Windows wheel ships the WebView2 DLLs but not this file.
 - `pywebview-js.txt`: the MIT notices of the JavaScript inside pywebview (domJSON, Native
   Promise Only, Symbol-ES6), which carry only a one-line attribution.
 - `ncurses.txt`: ncurses' `COPYING` (the python.org macOS Python bundles libncursesw).

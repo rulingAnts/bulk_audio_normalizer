@@ -146,8 +146,9 @@ def main() -> int:
             'Python for Windows ships, redistributable with applications under Microsoft\'s terms\n'
             '(https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files and\n'
             'https://learn.microsoft.com/cpp/windows/universal-crt-deployment).\n\n'
-            'Microsoft.Web.WebView2.*.dll (inside pywebview): the Microsoft Edge WebView2 SDK; its\n'
-            'license is in the pywebview section below (Microsoft.Web.WebView2.LICENSE.md).')))
+            'Microsoft.Web.WebView2.*.dll and WebView2Loader.dll (inside pywebview): the Microsoft\n'
+            'Edge WebView2 SDK, under the license that follows.\n\n'
+            + (STATIC / 'webview2.txt').read_text(encoding='utf-8'))))
 
     pyinstaller = md.distribution('pyinstaller')
     parts.append(section(
