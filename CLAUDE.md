@@ -7,11 +7,15 @@ People download releases built from `main`. Do all work on `dev`, push `dev` fre
 pushes to `main` unless `ALLOW_MAIN_PUSH=1` is set; hooks are per-clone, so recreate it after a new
 clone (copy it from `mac-audio-player-loader/.git/hooks/pre-push`).
 
-Releases are built by hand, not in CI: `python_webview/build_mac.sh` plus `create_dmg_mac.sh` on macOS,
-and `build_windows.bat` on Windows (see `WINDOWS_BUILD_GUIDE.md`). ⚠ The Windows `.exe` must be built
-with an x64 (AMD64) Python; an ARM64 Windows VM on Apple silicon produces an exe that will not run on
-most users' PCs. Check `python -c "import platform; print(platform.machine())"` says `AMD64` first.
-Tagging, creating the GitHub release and uploading the `.dmg` and `.exe` are Seth's steps.
+Windows: `.github/workflows/build-windows.yml` (added 2026-10-03, approved by Seth on 2026-10-02) builds
+the x64 portable `.exe` on `windows-latest` when a `v*` tag is pushed. It runs the unit tests against the
+FFmpeg it bundles and publishes the exe as a **pre-release** only (never "latest"). Pinned build
+versions are in `python_webview/constraints-windows-build.txt`. By hand, `build_windows.bat` still works
+(see `WINDOWS_BUILD_GUIDE.md`). ⚠ A hand-built `.exe` must come from an x64 (AMD64) Python; an ARM64
+Windows VM on Apple silicon produces an exe that will not run on most users' PCs. Check
+`python -c "import platform; print(platform.machine())"` says `AMD64` first.
+macOS is built by hand: `python_webview/build_mac.sh` plus `create_dmg_mac.sh`. Pushing tags, promoting a
+pre-release to a full release and uploading the `.dmg` are Seth's steps.
 
 ## ⚠️ GitHub costs — ask before anything billable (firm policy, 2026-07-07)
 

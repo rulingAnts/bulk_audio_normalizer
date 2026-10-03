@@ -1,0 +1,194 @@
+# Build the Windows x64 portable exe and publish it as a GitHub PRE-release.
+#
+# What it builds: python_webview/bulk_audio_normalizer.spec -> one portable onefile
+#   "Bulk Audio Normalizer.exe" (no installer) with FFmpeg + FFprobe inside, uploaded as
+#   "Bulk.Audio.Normalizer.exe", the asset name v2.0.1 shipped with. It runs the unit
+#   tests first, against the very ffmpeg.exe/ffprobe.exe that get bundled.
+# Cost: free. The repository is public and windows-latest is a standard GitHub-hosted
+#   runner (Seth approved this workflow on 2026-10-02). Do not switch to a larger/GPU
+#   runner (billable even on public repos) or add a schedule.
+# Releases: it never makes a full or "latest" release. A new release is created with
+#   --prerelease --latest=false; if the release already exists only the exe is replaced
+#   (--clobber) and its notes and pre-release flag are left alone. Seth promotes a
+#   pre-release to a full release by hand after testing it.
+# macOS is still built by hand on Seth's Mac (python_webview/build_mac.sh, then
+#   create_dmg_mac.sh); attach the .dmg before promoting, or the website's Mac button
+#   falls back to the release page.
+#
+# Triggers: pushing a tag v* (git push origin v2.0.2), or "Run workflow" with an
+# existing tag. GitHub only offers "Run workflow" (workflow_dispatch) for workflows that
+# are on the default branch (main); a tag push works from any branch.
+
+name: Build Windows x64 pre-release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish, e.g. v2.0.2
+        required: true
+        type: string
+
+permissions:
+  contents: write # create the release and upload the exe; nothing else
+
+concurrency:
+  group: build-windows-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      # inputs.tag is only set by workflow_dispatch; a tag push uses the pushed tag.
+      # Used from scripts as $env:TAG only, never pasted into a script.
+      TAG: ${{ inputs.tag || github.ref_name }}
+      FFMPEG_STATIC_VERSION: 5.3.0 # downloads FFmpeg 6.1.1 (win32-x64 build from gyan.dev)
+      FFPROBE_STATIC_VERSION: 3.1.0 # ships FFprobe 4.0.2 (win64 build from zeranoe)
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check the tag and the shell
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($PSVersionTable.PSVersion -lt [version]'7.4') { throw "pwsh 7.4+ needed, got $($PSVersionTable.PSVersion)" }
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "Not a release tag: '$env:TAG'" }
+          "Building $env:TAG"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Python must be x64 (an ARM64 exe would not run on most PCs)
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -c "import platform, struct, sys; print(sys.version, platform.machine()); assert platform.machine() == 'AMD64' and struct.calcsize('P') == 8, 'not x64 Python'"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Get FFmpeg and FFprobe (npm ffmpeg-static / ffprobe-static)
+        # setup_ffmpeg.py copies them from <repo>/node_modules into python_webview/bin/windows.
+        # ffmpeg-static fetches its binary in an install script, so scripts must run.
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm install --no-save --no-package-lock --no-audit --no-fund --ignore-scripts=false --foreground-scripts `
+            --prefix "$env:GITHUB_WORKSPACE" `
+            "ffmpeg-static@$env:FFMPEG_STATIC_VERSION" "ffprobe-static@$env:FFPROBE_STATIC_VERSION"
+          Get-ChildItem node_modules/ffmpeg-static, node_modules/ffprobe-static/bin/win32/x64
+          Get-Content node_modules/ffmpeg-static/ffmpeg.exe.README -TotalCount 15 -ErrorAction SilentlyContinue
+
+      - name: Copy them into python_webview/bin/windows
+        env:
+          PYTHONUTF8: '1' # setup_ffmpeg.py prints check marks; the tests below run without this
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python python_webview/setup_ffmpeg.py
+
+      - name: Check FFmpeg and FFprobe are x64 and runnable
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $bin = 'python_webview/bin/windows'
+          python .github/scripts/verify_windows_build.py pe "$bin/ffmpeg.exe" "$bin/ffprobe.exe"
+          foreach ($tool in 'ffmpeg', 'ffprobe') {
+            $version = & "$bin/$tool.exe" -hide_banner -version
+            $version | Select-Object -First 3
+            # THIRD_PARTY_NOTICES.md describes a GPL build; a --enable-nonfree build could not be shipped at all.
+            if ($version -match '--enable-nonfree') { throw "$tool is a nonfree build and must not be distributed" }
+            if (-not ($version -match '--enable-gpl')) { Write-Warning "$tool is not a GPL build: update THIRD_PARTY_NOTICES.md" }
+          }
+
+      - name: Install Python packages (pinned)
+        working-directory: python_webview
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-build.txt -c constraints-windows-build.txt
+          python -m pip freeze
+
+      - name: Unit tests (names with every Windows-legal character, real FFmpeg)
+        # No PYTHONUTF8 here: the tests run with Windows' default code page, as the app does.
+        env:
+          BAN_REQUIRE_FFMPEG: '1'
+          BAN_REQUIRE_NODE: '1'
+          BAN_REQUIRE_BUNDLED_FFMPEG: '1'
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m unittest discover -s python_webview/tests -v
+
+      - name: Build the exe (PyInstaller, onefile)
+        working-directory: python_webview
+        # The spec asks for UPX; pointing --upx-dir at an empty folder keeps UPX out even if
+        # the runner image ever ships it (UPX-packed DLLs trip antivirus scanners).
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $noUpx = New-Item -ItemType Directory -Force (Join-Path $env:RUNNER_TEMP 'no-upx')
+          python -m PyInstaller --noconfirm --clean --upx-dir "$noUpx" `
+            --distpath dist\windows --workpath build\windows bulk_audio_normalizer.spec
+
+      - name: Check the exe (x64, size, FFmpeg inside)
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $exe = 'python_webview/dist/windows/Bulk Audio Normalizer.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw "Build produced no '$exe'" }
+          python .github/scripts/verify_windows_build.py pe "$exe"
+          python .github/scripts/verify_windows_build.py size "$exe" 30 300 # v2.0.1: 60.5 MB
+          python .github/scripts/verify_windows_build.py bundle "$exe" `
+            "bin/windows/ffmpeg.exe=python_webview/bin/windows/ffmpeg.exe" `
+            "bin/windows/ffprobe.exe=python_webview/bin/windows/ffprobe.exe"
+          New-Item -ItemType Directory -Force upload | Out-Null
+          Copy-Item -LiteralPath $exe -Destination 'upload/Bulk.Audio.Normalizer.exe'
+          $hash = (Get-FileHash 'upload/Bulk.Audio.Normalizer.exe' -Algorithm SHA256).Hash
+          $mb = [math]::Round((Get-Item 'upload/Bulk.Audio.Normalizer.exe').Length / 1MB, 1)
+          "Bulk.Audio.Normalizer.exe for $env:TAG - $mb MB - SHA-256 $hash"
+          "### Bulk.Audio.Normalizer.exe ($env:TAG)`n`n- Size: $mb MB`n- SHA-256: ``$hash``" >> $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Bulk.Audio.Normalizer-${{ env.TAG }}-windows-x64
+          path: upload/Bulk.Audio.Normalizer.exe
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish as a pre-release (or replace the exe on an existing release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $exe = 'upload/Bulk.Audio.Normalizer.exe'
+          $exists = $true
+          try { gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json tagName *> $null } catch { $exists = $false }
+          if ($exists) {
+            "Release $env:TAG exists: replacing its exe only (notes and pre-release flag unchanged)."
+            gh release upload $env:TAG $exe --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            $notes = "release-notes/$env:TAG.md"
+            if (-not (Test-Path -LiteralPath $notes)) {
+              $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+              @(
+                "**Pre-release: not yet tested.** Built automatically from tag $env:TAG for Windows x64.",
+                '',
+                'Download **Bulk.Audio.Normalizer.exe** (portable, no installer). macOS users: please use the latest full release.',
+                '',
+                'See CHANGELOG.md for what changed. Please report problems in the issue tracker.'
+              ) | Set-Content -LiteralPath $notes -Encoding utf8
+            }
+            $version = $env:TAG.TrimStart('v')
+            gh release create $env:TAG $exe --repo $env:GITHUB_REPOSITORY --verify-tag `
+              --prerelease --latest=false `
+              --title "Bulk Audio Normalizer $version (pre-release)" `
+              --notes-file $notes
+          }
+          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json isPrerelease,url,assets --jq '{isPrerelease, url, assets: [.assets[].name]}'
