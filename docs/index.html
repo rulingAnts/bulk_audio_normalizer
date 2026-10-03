@@ -22,7 +22,10 @@
       </div>
       <p class="small">If the buttons are disabled, visit the <a id="release-page-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/latest">latest releases page</a>.</p>
       <!-- Pre-release notice. Without JavaScript it stays as written; script.js points it at the
-           newest pre-release that is newer than the latest full release, or hides it when there is none. -->
+           newest pre-release that is newer than the latest full release, or hides it when there is none.
+           DELETE this <p> once v2.0.2 is promoted to a full release: visitors without JavaScript, and
+           anyone the GitHub API rate-limits (60 requests/hour per IP; this page makes 2), still see it.
+           Merge this into main only after the v2.0.2 release exists (until then the link is a 404). -->
       <p id="prerelease-notice" class="prerelease-notice">
         <strong>Testing a fix?</strong>
         A <a id="prerelease-link" href="https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2">pre-release (<span id="prerelease-tag">v2.0.2</span>)<span id="prerelease-platforms"> for Windows</span></a>
