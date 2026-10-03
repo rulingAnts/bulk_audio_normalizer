@@ -31,6 +31,10 @@ if is_windows:
         ffmpeg_datas.append(('bin/windows/ffmpeg.exe', 'bin/windows'))
     if os.path.exists('bin/windows/ffprobe.exe'):
         ffmpeg_datas.append(('bin/windows/ffprobe.exe', 'bin/windows'))
+    # FFmpeg's LGPL text and our notice travel with the binaries (build_ffmpeg_windows.sh)
+    for notice in ('COPYING.LGPLv2.1', 'FFMPEG-NOTICE.txt'):
+        if os.path.exists(f'bin/windows/{notice}'):
+            ffmpeg_datas.append((f'bin/windows/{notice}', 'bin/windows'))
 else:
     # Use macOS/Linux binaries - keep them in bin/macos/
     if os.path.exists('bin/macos/ffmpeg'):

@@ -35,26 +35,30 @@ refuses to run on macOS for that reason.
 
 ## Windows Binaries
 
-Location: `bin/windows/`
+Location: `bin/windows/` (`ffmpeg.exe`, `ffprobe.exe`, `COPYING.LGPLv2.1`, `FFMPEG-NOTICE.txt`)
 
-**Setup:**
-These are copied from the Electron version:
+**Setup (release builds):**
 ```bash
-# From project root
-cp build/win32-resources/ffmpeg-static/ffmpeg.exe python_webview/bin/windows/
-cp node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe python_webview/bin/windows/
+# On Linux (or MSYS2) with mingw-w64 and nasm:
+#   sudo apt-get install gcc-mingw-w64-x86-64 nasm
+./build_ffmpeg_windows.sh
 ```
 
-**Source:**
-- `ffmpeg.exe`: From Electron build resources
-- `ffprobe.exe`: From npm ffprobe-static package
+This cross-compiles the same FFmpeg 6.1.6 as the macOS build (pinned commit, LGPL v2.1+, no
+external libraries) into 64-bit `ffmpeg.exe` / `ffprobe.exe` that need only DLLs that come with
+Windows, writes the license text and notice (the spec bundles both), and
+`build/ffmpeg-windows/ffmpeg-<version>-source-windows.tar.xz`, the exact source, which is attached
+to the release next to the `.exe`. `.github/workflows/build-windows.yml` runs it on ubuntu-latest.
+
+**Local development only:** `python setup_ffmpeg.py` (after `npm install`) copies the npm
+ffmpeg-static / ffprobe-static builds. Those are GPLv3 builds: never ship an exe built with them.
 
 ## PyInstaller Integration
 
 The `bulk_audio_normalizer.spec` file automatically selects the correct binaries based on the build platform:
 
-- **macOS build:** Bundles `bin/macos/ffmpeg` and `bin/macos/ffprobe`
-- **Windows build:** Bundles `bin/windows/ffmpeg.exe` and `bin/windows/ffprobe.exe`
+- **macOS build:** Bundles `bin/macos/ffmpeg`, `bin/macos/ffprobe` and their license files
+- **Windows build:** Bundles `bin/windows/ffmpeg.exe`, `bin/windows/ffprobe.exe` and their license files
 
 During runtime, `backend/ffmpeg_paths.py` finds these binaries in the PyInstaller bundle.
 
@@ -101,12 +105,8 @@ To update to newer FFmpeg versions:
 
 **Windows:**
 ```bash
-# Update npm packages in main project
-cd ..
-npm update ffmpeg-static ffprobe-static
-# Copy new binaries
-cp build/win32-resources/ffmpeg-static/ffmpeg.exe python_webview/bin/windows/
-cp node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe python_webview/bin/windows/
+# Change FFMPEG_TAG and FFMPEG_COMMIT, then
+./build_ffmpeg_windows.sh
 ```
 
 ## Version Control
@@ -114,6 +114,6 @@ cp node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe python_webview/bin/wind
 These binaries are typically excluded from git due to their large size. Users building from source should:
 
 1. Run `./build_ffmpeg_mac.sh` (macOS)
-2. Copy binaries from Electron build (Windows)
+2. Run `./build_ffmpeg_windows.sh` (Windows binaries, on Linux or MSYS2)
 
 Or download directly from [ffmpeg.org](https://ffmpeg.org/download.html).

@@ -48,6 +48,8 @@ def main():
     
     print(f"Platform: {system}")
     print(f"Setting up FFmpeg binaries in: {platform_dir}")
+    print("NOTE: the npm builds copied here are GPLv3 builds, for local development only.")
+    print("      Release builds use build_ffmpeg_windows.sh (LGPL); never ship an exe built with these.")
     
     # Find and copy ffmpeg
     ffmpeg_static = node_modules / 'ffmpeg-static'

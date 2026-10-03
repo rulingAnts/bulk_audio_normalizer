@@ -5,8 +5,8 @@
 #   no external libraries, pinned to FFmpeg's n6.1.6 commit), the app with PyInstaller
 #   (bulk_audio_normalizer.spec), and "Bulk Audio Normalizer.dmg" with create-dmg. It runs
 #   the unit tests first, against the very ffmpeg/ffprobe that get bundled.
-# Assets: Bulk.Audio.Normalizer.dmg and ffmpeg-<version>-source.tar.xz. The LGPL wants the
-#   FFmpeg source offered from the same place as the binary, so the two always go together.
+# Assets: Bulk.Audio.Normalizer.dmg and ffmpeg-<version>-source-macos.tar.xz. The LGPL wants
+#   the FFmpeg source offered from the same place as the binary, so the two always go together.
 # Cost: free. The repository is public and macos-15 is a standard GitHub-hosted runner
 #   (Seth asked for the Mac build to run on GitHub on 2026-10-03). Do not switch to a
 #   larger runner (macos-*-large / -xlarge are billable even on public repos) or add a
@@ -16,10 +16,11 @@
 #     release. The Windows workflow creates the release (as a pre-release); this one waits
 #     up to 30 minutes for it to appear and never creates, edits or promotes a release.
 #   - a branch build/macos-<tag> (git push origin dev:build/macos-v2.0.2): builds that
-#     branch's commit for release <tag> and keeps the result as a workflow artifact only,
-#     so it can be checked before it is attached by hand (gh release upload). Delete the
-#     branch afterwards. (workflow_dispatch is not used: GitHub only offers it for
-#     workflows on main.)
+#     branch's commit and adds the assets to release <tag> only if it exists and is still
+#     a PRE-release (a full release is never touched); otherwise the result stays a
+#     workflow artifact. Use it to rebuild a pre-release from newer code than its tag.
+#     Delete the branch afterwards. (workflow_dispatch is not used: GitHub only offers it
+#     for workflows on main.)
 # The .dmg is ad-hoc signed, not notarized: on first launch macOS users choose
 #   System Settings > Privacy & Security > Open Anyway.
 
@@ -56,7 +57,7 @@ jobs:
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             tag="$GITHUB_REF_NAME"; mode=publish
           else
-            tag="${GITHUB_REF_NAME#build/macos-}"; mode=artifact
+            tag="${GITHUB_REF_NAME#build/macos-}"; mode=prerelease-only
           fi
           if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
             echo "Not a release tag: '$tag'" >&2; exit 1
@@ -199,7 +200,7 @@ jobs:
           set -euo pipefail
           mkdir -p upload
           cp "python_webview/dist/macos/Bulk Audio Normalizer.dmg" upload/Bulk.Audio.Normalizer.dmg
-          src="$(ls python_webview/build/ffmpeg/ffmpeg-*-source.tar.xz)"
+          src="$(ls python_webview/build/ffmpeg/ffmpeg-*-source-macos.tar.xz)"
           cp "$src" upload/
           cd upload
           shasum -a 256 * | tee SHA256SUMS.txt
@@ -220,15 +221,21 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      - name: Add both assets to the release (tag builds only)
-        if: env.MODE == 'publish'
+      - name: Add both assets to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if [ "$MODE" = prerelease-only ]; then
+            pre="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease 2> /dev/null || echo missing)"
+            if [ "$pre" != true ]; then
+              echo "Release $TAG is not an existing pre-release ($pre): not touching it; the assets are in the workflow artifact."
+              exit 0
+            fi
+          fi
           for i in $(seq 1 60); do
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName > /dev/null 2>&1; then
-              gh release upload "$TAG" upload/Bulk.Audio.Normalizer.dmg upload/ffmpeg-*-source.tar.xz \
+              gh release upload "$TAG" upload/Bulk.Audio.Normalizer.dmg upload/ffmpeg-*-source-macos.tar.xz \
                 --clobber --repo "$GITHUB_REPOSITORY"
               gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease,url,assets \
                 --jq '{isPrerelease, url, assets: [.assets[].name]}'

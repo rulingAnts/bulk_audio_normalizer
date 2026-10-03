@@ -21,10 +21,14 @@ All notable changes to this project will be documented in this file.
   and FFprobe are FFmpeg 6.1.6 compiled from FFmpeg's source with no external libraries, under
   the LGPLv2.1 (`build_ffmpeg_mac.sh`); the license text and a notice ship inside the app, and the
   exact source is attached to the release
+- The Windows exe uses the same FFmpeg 6.1.6, LGPL build, cross-compiled from source
+  (`build_ffmpeg_windows.sh`) instead of the npm ffmpeg-static (gyan.dev 6.1.1, GPLv3) and
+  ffprobe-static (4.0.2, GPLv3) binaries, with its license text, notice and source the same way
 - The app's footer says which FFmpeg it uses and under which license
 
 ### Changed
-- `setup_ffmpeg.py` refuses to run on macOS and points to `build_ffmpeg_mac.sh`
+- `setup_ffmpeg.py` refuses to run on macOS and points to `build_ffmpeg_mac.sh`; on Windows it is
+  for local development only (its npm builds are GPL)
 
 ### Removed
 - The macOS downloads of v1.5.1, v2.0.0 and v2.0.1, and the v1.5.1 Windows installer, were taken

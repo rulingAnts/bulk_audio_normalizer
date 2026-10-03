@@ -31,7 +31,7 @@
 #   - bin/macos/ also gets COPYING.LGPLv2.1 and FFMPEG-NOTICE.txt, which the
 #     app bundles next to the binaries;
 #   - the exact source that was built, plus BUILD-INFO.txt with the configure
-#     line, is written to $FFMPEG_WORK/ffmpeg-<version>-source.tar.xz. Attach it
+#     line, is written to $FFMPEG_WORK/ffmpeg-<version>-source-macos.tar.xz. Attach it
 #     to the same GitHub release as the .dmg (same place as the binary).
 
 set -euo pipefail
@@ -148,7 +148,7 @@ chmod 755 "$OUT_DIR/ffmpeg" "$OUT_DIR/ffprobe"
 VERSION="$(tr -d '[:space:]' < "$FFMPEG_SRC/RELEASE")"
 COMMIT="$(git -C "$FFMPEG_SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
 CONFIG_LINE="./configure ${CONFIGURE_FLAGS[*]}"
-SOURCE_NAME="ffmpeg-$VERSION-source.tar.xz"
+SOURCE_NAME="ffmpeg-$VERSION-source-macos.tar.xz"
 
 cp "$FFMPEG_SRC/COPYING.LGPLv2.1" "$OUT_DIR/COPYING.LGPLv2.1"
 cat > "$OUT_DIR/FFMPEG-NOTICE.txt" <<NOTICE
