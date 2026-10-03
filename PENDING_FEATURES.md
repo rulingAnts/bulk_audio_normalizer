@@ -7,6 +7,12 @@ follow-up fixes for every Windows-legal character in file names are on `dev`, wi
 run on GitHub: it runs when the `v2.0.2` tag is pushed. Release notes: `release-notes/v2.0.2.md`.
 The website links to the pre-release from the `site-prerelease-link` branch (for `main`). Still to
 do: confirm on a real Windows PC (issue #2), then Seth promotes it and attaches the macOS `.dmg`.
+- Merge `site-prerelease-link` into `main` only once the v2.0.2 release exists; until then the
+  notice's link (what visitors without JavaScript get) is a 404.
+- **When v2.0.2 is promoted to a full release, delete `#prerelease-notice` from `docs/index.html`.**
+  `docs/script.js` hides it once no newer pre-release exists, but visitors without JavaScript, and
+  anyone the GitHub API rate-limits (60 requests an hour per IP; the page makes 2), still see the
+  static "v2.0.2 pre-release" text.
 (Paused 2026-10-02, resumed 2026-10-03; the notes below are the original brief.)
 
 **Asked for:** a GitHub Actions workflow that builds the x64 Windows `.exe` and publishes it as a

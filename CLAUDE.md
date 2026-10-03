@@ -15,7 +15,9 @@ versions are in `python_webview/constraints-windows-build.txt`. By hand, `build_
 Windows VM on Apple silicon produces an exe that will not run on most users' PCs. Check
 `python -c "import platform; print(platform.machine())"` says `AMD64` first.
 macOS is built by hand: `python_webview/build_mac.sh` plus `create_dmg_mac.sh`. Pushing tags, promoting a
-pre-release to a full release and uploading the `.dmg` are Seth's steps.
+pre-release to a full release and uploading the `.dmg` are Seth's steps. After a promotion, delete the
+static pre-release notice (`#prerelease-notice` in `docs/index.html`, on `main`): the script hides it,
+but not for visitors without JavaScript or when the GitHub API is rate-limited.
 
 ## ⚠️ GitHub costs — ask before anything billable (firm policy, 2026-07-07)
 

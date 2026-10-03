@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file.
 - A batch that stopped on an error no longer reports "Completed"; the error is shown, the status stays "Error", and the controls unlock
 - A file FFmpeg cannot process is marked red, the batch goes on, and the end of the batch lists the files that were not written, instead of "Completed" (the end-of-batch check never ran before)
 - `.wave` files were scanned but could not be written
-- Files with the same name in different subfolders shared one row in the progress list
+- Files with the same name in different subfolders shared one row in the progress list; rows and preview cards now show the path within the input folder
+- LUFS mode (two-pass, with verbose logs on): a file whose name contains `{` silently got single-pass normalization
 - macOS `._` metadata files on USB drives and memory cards are skipped instead of processed as audio
 
 ### Added
