@@ -265,6 +265,32 @@ def detect_voice_region(input_path: str, duration_sec: float, settings: Dict,
         return None
 
 
+def parse_loudnorm_json(stderr_text: str) -> Optional[Dict]:
+    """
+    The measurement loudnorm prints as JSON at the end of its analysis pass.
+
+    Searched for from the end, as a brace pair that parses and has
+    "input_i": FFmpeg echoes the input name in its "Input #0 ... from '...'"
+    line, and a name may contain '{' or '}' (Windows allows both). The old
+    regex started matching at a '{' in such a name, the JSON then failed to
+    parse, and the file silently got single-pass loudnorm.
+    """
+    end = len(stderr_text)
+    while True:
+        start = stderr_text.rfind('{', 0, end)
+        if start < 0:
+            return None
+        close = stderr_text.find('}', start)
+        if close >= 0:
+            try:
+                parsed = json.loads(stderr_text[start:close + 1])
+            except ValueError:
+                parsed = None
+            if isinstance(parsed, dict) and 'input_i' in parsed:
+                return parsed
+        end = start
+
+
 def ffmpeg_error_tail(stderr: Optional[bytes], lines: int = 3) -> str:
     """The last few non-empty lines of FFmpeg's stderr, for a log message."""
     text = (stderr or b'').decode('utf-8', errors='replace')
@@ -355,20 +381,18 @@ def normalize_file(input_path: str, output_path: str, settings: Dict,
         _, stderr = proc.communicate()
         stderr_text = stderr.decode('utf-8', errors='ignore')
         
-        # Parse JSON output
-        json_match = re.findall(r'\{[\s\S]*?\}', stderr_text)
-        if json_match:
-            try:
-                parsed = json.loads(json_match[-1])
-                params = {
-                    'measured_I': parsed.get('input_i'),
-                    'measured_LRA': parsed.get('input_lra'),
-                    'measured_TP': parsed.get('input_tp'),
-                    'measured_thresh': parsed.get('input_thresh'),
-                    'offset': parsed.get('target_offset')
-                }
-            except json.JSONDecodeError:
-                pass
+        parsed = parse_loudnorm_json(stderr_text)
+        if parsed:
+            params = {
+                'measured_I': parsed.get('input_i'),
+                'measured_LRA': parsed.get('input_lra'),
+                'measured_TP': parsed.get('input_tp'),
+                'measured_thresh': parsed.get('input_thresh'),
+                'offset': parsed.get('target_offset')
+            }
+            log_callback(job_id, 'analyze',
+                         f"LUFS measured: I={params['measured_I']} LUFS, TP={params['measured_TP']} dBTP, "
+                         f"LRA={params['measured_LRA']} LU (two-pass)")
                 
     elif norm_mode == 'peak':
         # Peak analysis with volumedetect

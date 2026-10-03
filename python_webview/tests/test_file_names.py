@@ -60,6 +60,8 @@ OTHER_NAMES = [
     'Take1,Tom.wav',
     'semi;colon=equals.wav',
     '[brackets] (parens) {braces}.wav',
+    'open { brace.wav',
+    'close } brace.wav',
     'caret^ backtick`.wav',
     'tune \U0001F3B5.wav',
     '  two  spaces .wav',
@@ -334,6 +336,20 @@ class ScanTests(unittest.TestCase):
         many = main.not_written_message([f'{i}.wav' for i in range(8)], 8)
         self.assertIn('0.wav, 1.wav, 2.wav, 3.wav, 4.wav and 3 more.', many)
 
+    def test_loudnorm_json_after_a_name_with_braces(self):
+        # FFmpeg prints "Input #0, wav, from '<name>':" before loudnorm's JSON.
+        from backend.audio_processor import parse_loudnorm_json
+        block = ('[Parsed_loudnorm_0 @ 0x1] \n{\n\t"input_i" : "-27.47",\n\t"input_tp" : "-4.47",\n'
+                 '\t"input_lra" : "0.00",\n\t"input_thresh" : "-37.47",\n\t"target_offset" : "0.53"\n}\n')
+        for name in ['x{y 02.wav', 'x}y.wav', '[brackets] (parens) {braces}.wav',
+                     'x{"input_i" : "1"}y.wav', BLACKBRIX]:
+            with self.subTest(name=name):
+                text = (f"Input #0, wav, from 'C:\\Music\\{name}':\n  Duration: 00:00:00.50\n"
+                        f"{block}[out#0/null @ 0x2] audio:0KiB\n")
+                self.assertEqual(parse_loudnorm_json(text)['input_i'], '-27.47')
+        self.assertIsNone(parse_loudnorm_json("Input #0, wav, from 'x{y.wav':\n"))
+        self.assertIsNone(parse_loudnorm_json(''))
+
     def test_ffmpeg_error_tail(self):
         from backend.audio_processor import ffmpeg_error_tail
         err = 'one\n\ntwo\nC:\\x\\öü.wav: Invalid data\n'.encode('utf-8') + b'\xff bad byte\n'
@@ -549,9 +565,14 @@ class EndToEndNameTests(unittest.TestCase):
         self.check_batch(self.run_batch({'autoTrim': True, 'trimMinFileMs': 0, 'trimHPF': True}))
 
     def test_batch_lufs(self):
-        # loudnorm analysis + render
-        self.check_batch(self.run_batch({'normMode': 'lufs', 'verboseLogs': True,
-                                         'targetBitDepth': 'original'}))
+        # loudnorm analysis + render. Two-pass needs verboseLogs (FFmpeg prints
+        # the measurement at -v info only).
+        w = self.run_batch({'normMode': 'lufs', 'verboseLogs': True, 'targetBitDepth': 'original'})
+        self.check_batch(w)
+        measured = {args[0] for fn, args in map(parse_call, w.scripts)
+                    if fn == 'triggerLog' and args[1] == 'analyze' and args[2].startswith('LUFS measured: ')}
+        # Every file got two-pass loudnorm, including names with a lone '{' or '}'.
+        self.assertEqual(sorted(measured), sorted(self.rels))
 
     def test_batch_into_an_output_folder_inside_the_input_folder(self):
         # "Music" -> "Music/normalized": allowed by the UI when it is empty.
