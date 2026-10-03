@@ -72,6 +72,18 @@ if [ -n "${FFMPEG_COMMIT:-}" ]; then
     fi
 fi
 
+# The source archive must be exactly what is built: a git checkout with no local changes.
+# (Checked before building, so a failed check never leaves binaries or notices behind.)
+IS_GIT=0
+if git -C "$FFMPEG_SRC" rev-parse --git-dir > /dev/null 2>&1; then
+    IS_GIT=1
+    if [ -n "$(git -C "$FFMPEG_SRC" status --porcelain --untracked-files=no)" ]; then
+        echo "The FFmpeg checkout has local changes; the source archive must match the build." >&2
+        exit 1
+    fi
+fi
+rm -f "$FFMPEG_WORK"/ffmpeg-*-source-macos.tar.xz
+
 BUILD_DIR="$FFMPEG_WORK/build-$FFMPEG_TAG-$ARCH"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -147,7 +159,11 @@ chmod 755 "$OUT_DIR/ffmpeg" "$OUT_DIR/ffprobe"
 # ---- what the LGPL asks to travel with the binaries ----
 VERSION="$(tr -d '[:space:]' < "$FFMPEG_SRC/RELEASE")"
 COMMIT="$(git -C "$FFMPEG_SRC" rev-parse HEAD 2>/dev/null || echo unknown)"
+CC_DESC="$(clang --version)"; CC_DESC="${CC_DESC%%$'\n'*}"
 CONFIG_LINE="./configure ${CONFIGURE_FLAGS[*]}"
+THIS_YEAR="$(awk '/#define CONFIG_THIS_YEAR/{print $3}' "$BUILD_DIR/config.h")"
+RELEASE_URL="${RELEASE_URL:-https://github.com/rulingAnts/bulk_audio_normalizer/releases}"
+APP_COMMIT="${GITHUB_SHA:-$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)}"
 SOURCE_NAME="ffmpeg-$VERSION-source-macos.tar.xz"
 
 cp "$FFMPEG_SRC/COPYING.LGPLv2.1" "$OUT_DIR/COPYING.LGPLv2.1"
@@ -156,8 +172,12 @@ FFmpeg in Bulk Audio Normalizer for macOS
 
 This software uses code of FFmpeg (https://ffmpeg.org), licensed under the
 GNU Lesser General Public License, version 2.1 or later. Its source can be
-downloaded from the release page this app came from, as $SOURCE_NAME,
+downloaded from the release page this app came from, as $SOURCE_NAME:
+  $RELEASE_URL
 and from https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz.
+
+FFmpeg is copyright (c) 2000-$THIS_YEAR the FFmpeg developers. It comes with
+ABSOLUTELY NO WARRANTY; see COPYING.LGPLv2.1.
 
 The ffmpeg and ffprobe programs next to this file are FFmpeg $VERSION
 (git tag $FFMPEG_TAG, commit $COMMIT), unmodified, built for $ARCH with:
@@ -171,9 +191,7 @@ FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
 NOTICE
 
 # The exact source that was built, with the configure line at its root.
-if git -C "$FFMPEG_SRC" rev-parse --git-dir > /dev/null 2>&1; then
-    changes="$(git -C "$FFMPEG_SRC" status --porcelain --untracked-files=no)"
-    [ -z "$changes" ] || fail "the FFmpeg checkout has local changes; the source archive must match the build"
+if [ "$IS_GIT" = 1 ]; then
     cat > "$BUILD_DIR/BUILD-INFO.txt" <<INFO
 FFmpeg $VERSION (git tag $FFMPEG_TAG, commit $COMMIT), unmodified.
 
@@ -182,6 +200,11 @@ https://github.com/rulingAnts/bulk_audio_normalizer (python_webview/), with:
 
   $CONFIG_LINE
   make ffmpeg ffprobe
+
+Compiler: $CC_DESC
+App source this was built for: https://github.com/rulingAnts/bulk_audio_normalizer/tree/$APP_COMMIT
+(The app bundler, PyInstaller, may re-sign or compress the programs; they are otherwise
+the build output of the line above.)
 
 License: GNU Lesser General Public License, version 2.1 or later.
 INFO

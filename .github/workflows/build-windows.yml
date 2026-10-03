@@ -78,6 +78,9 @@ jobs:
         working-directory: python_webview
         run: |
           set -euo pipefail
+          # FFMPEG-NOTICE.txt names the page the source is on
+          tag="${REF_TAG#build/windows-}"
+          export RELEASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
           ./build_ffmpeg_windows.sh
           ls -la bin/windows
           cat bin/windows/FFMPEG-NOTICE.txt
@@ -177,6 +180,12 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           python -m unittest discover -s python_webview/tests -v
 
+      - name: Collect the licenses of everything bundled
+        working-directory: python_webview
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python collect_licenses.py
+
       - name: Build the exe (PyInstaller, onefile)
         working-directory: python_webview
         # The spec asks for UPX; pointing --upx-dir at an empty folder keeps UPX out even if
@@ -198,7 +207,13 @@ jobs:
             "bin/windows/ffmpeg.exe=python_webview/bin/windows/ffmpeg.exe" `
             "bin/windows/ffprobe.exe=python_webview/bin/windows/ffprobe.exe" `
             "bin/windows/COPYING.LGPLv2.1=python_webview/bin/windows/COPYING.LGPLv2.1" `
-            "bin/windows/FFMPEG-NOTICE.txt=python_webview/bin/windows/FFMPEG-NOTICE.txt"
+            "bin/windows/FFMPEG-NOTICE.txt=python_webview/bin/windows/FFMPEG-NOTICE.txt" `
+            "licenses/LICENSE.txt=python_webview/build/licenses/LICENSE.txt" `
+            "licenses/COPYRIGHT.txt=python_webview/build/licenses/COPYRIGHT.txt" `
+            "licenses/THIRD_PARTY_NOTICES.md=python_webview/build/licenses/THIRD_PARTY_NOTICES.md" `
+            "licenses/SOURCE.txt=python_webview/build/licenses/SOURCE.txt" `
+            "licenses/THIRD-PARTY-LICENSES.txt=python_webview/build/licenses/THIRD-PARTY-LICENSES.txt"
+          if (-not (Select-String -LiteralPath python_webview/build/licenses/SOURCE.txt -SimpleMatch $env:GITHUB_SHA -Quiet)) { throw "SOURCE.txt does not name $env:GITHUB_SHA" }
           New-Item -ItemType Directory -Force upload | Out-Null
           Copy-Item -LiteralPath $exe -Destination 'upload/Bulk.Audio.Normalizer.exe'
           Copy-Item ffmpeg-in/source/*.tar.xz upload/
@@ -238,7 +253,9 @@ jobs:
           # the draft and it stays unpublished. Both are left to Seth on purpose.
           if ($exists) {
             "Release $env:TAG exists: replacing its Windows assets only (notes and pre-release flag unchanged)."
-            gh release upload $env:TAG $exe $src --clobber --repo $env:GITHUB_REPOSITORY
+            # Source first: the exe must never be on the release without its source.
+            gh release upload $env:TAG $src --clobber --repo $env:GITHUB_REPOSITORY
+            gh release upload $env:TAG $exe --clobber --repo $env:GITHUB_REPOSITORY
           } else {
             $notes = "release-notes/$env:TAG.md"
             if (-not (Test-Path -LiteralPath $notes)) {

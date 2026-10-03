@@ -36,6 +36,11 @@ fi
 echo "🧹 Cleaning previous macOS builds..."
 rm -rf build/macos dist/macos
 
+# License texts of everything the app bundles. Run it with the same Python environment
+# as PyInstaller (an activated venv, or the CI's Python), so it sees the same packages.
+echo "📜 Collecting licenses..."
+python3 collect_licenses.py
+
 # Build with PyInstaller
 echo "🔨 Building application..."
 pyinstaller --distpath dist/macos --workpath build/macos bulk_audio_normalizer.spec

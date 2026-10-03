@@ -44,7 +44,9 @@ cd python_webview
 pip install -r requirements.txt
 ./build_ffmpeg_mac.sh    # macOS: builds an LGPL FFmpeg from source (needs Xcode Command Line Tools)
 # Windows: ./build_ffmpeg_windows.sh on Linux/MSYS2 (LGPL, as released), or for local
-#          development only, python setup_ffmpeg.py after npm install (GPL builds; never ship them)
+#          development only (GPL builds; never ship them), from the repository root:
+#            npm install --no-save ffmpeg-static@5.3.0 ffprobe-static@3.1.0
+#          then python setup_ffmpeg.py
 python3 main.py
 ```
 
@@ -69,10 +71,10 @@ Release builds are made on GitHub instead: `.github/workflows/build-macos.yml` (
 Both apps bundle FFmpeg 6.1.6 built from source under the LGPLv2.1 (`build_ffmpeg_mac.sh`,
 `build_ffmpeg_windows.sh`), with its exact source attached to the release. Never ship the npm
 ffmpeg-static / ffprobe-static binaries: the macOS one is a nonfree build and the Windows ones
-are GPL builds (see THIRD_PARTY_NOTICES.md).
-
-```bash
-```
+are GPL builds (see THIRD_PARTY_NOTICES.md). A `build/macos-<tag>` or `build/windows-<tag>`
+branch rebuilds an existing pre-release from newer code than its tag. Every build bundles a
+`licenses` folder (`collect_licenses.py`): the licenses of Python and every bundled package, the
+app's own license, and `SOURCE.txt`, which names the commit it was built from.
 
 **Windows:**
 ```batch

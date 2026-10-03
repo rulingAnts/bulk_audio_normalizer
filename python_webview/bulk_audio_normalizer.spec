@@ -46,6 +46,15 @@ else:
         if os.path.exists(f'bin/macos/{notice}'):
             ffmpeg_datas.append((f'bin/macos/{notice}', 'bin/macos'))
 
+# License texts of everything bundled, plus the app's own license and source pointer
+# (collect_licenses.py writes build/licenses/; the build scripts run it first).
+license_datas = []
+if os.path.isdir('build/licenses'):
+    for name in sorted(os.listdir('build/licenses')):
+        license_datas.append((os.path.join('build/licenses', name), 'licenses'))
+if not license_datas:
+    raise SystemExit('build/licenses/ is empty: run python collect_licenses.py first')
+
 # Collect all backend modules
 backend_modules = collect_submodules('backend')
 
@@ -64,7 +73,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=frontend_datas + ffmpeg_datas,
+    datas=frontend_datas + ffmpeg_datas + license_datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},

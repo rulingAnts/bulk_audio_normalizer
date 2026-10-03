@@ -15,6 +15,7 @@
 #   - a tag v* (git push origin v2.0.3): builds the tag and adds both assets to that tag's
 #     release. The Windows workflow creates the release (as a pre-release); this one waits
 #     up to 30 minutes for it to appear and never creates, edits or promotes a release.
+#     Re-running a tag build replaces the .dmg even if Seth has promoted that release.
 #   - a branch build/macos-<tag> (git push origin dev:build/macos-v2.0.2): builds that
 #     branch's commit and adds the assets to release <tag> only if it exists and is still
 #     a PRE-release (a full release is never touched); otherwise the result stays a
@@ -64,6 +65,8 @@ jobs:
           fi
           echo "TAG=$tag" >> "$GITHUB_ENV"
           echo "MODE=$mode" >> "$GITHUB_ENV"
+          # FFMPEG-NOTICE.txt names the page the source is on
+          echo "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_ENV"
           echo "Building for $tag ($mode) from $GITHUB_SHA"
 
       - uses: actions/checkout@v6
@@ -148,6 +151,14 @@ jobs:
             done
           done
           inside="$app/Contents/Frameworks/bin/macos"
+
+          # The licenses of everything bundled, the app's own license and its source pointer
+          for f in LICENSE.txt COPYRIGHT.txt THIRD_PARTY_NOTICES.md SOURCE.txt THIRD-PARTY-LICENSES.txt; do
+            [ -f "$app/Contents/Resources/licenses/$f" ] || fail "licenses/$f missing from the app"
+            cmp "$app/Contents/Resources/licenses/$f" "build/licenses/$f" || fail "licenses/$f differs"
+          done
+          grep -q "$GITHUB_SHA" "$app/Contents/Resources/licenses/SOURCE.txt" || fail "SOURCE.txt does not name $GITHUB_SHA"
+          grep -q "$RELEASE_URL" "$inside/FFMPEG-NOTICE.txt" || fail "FFMPEG-NOTICE.txt does not name $RELEASE_URL"
           for bin in ffmpeg ffprobe; do
             file "$inside/$bin" | grep -q 'Mach-O 64-bit executable arm64$' || fail "$bin is not arm64"
             lic="$("$inside/$bin" -hide_banner -L 2>&1)"
@@ -235,7 +246,9 @@ jobs:
           fi
           for i in $(seq 1 60); do
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName > /dev/null 2>&1; then
-              gh release upload "$TAG" upload/Bulk.Audio.Normalizer.dmg upload/ffmpeg-*-source-macos.tar.xz \
+              # Source first: the .dmg must never be on the release without its source.
+              gh release upload "$TAG" upload/ffmpeg-*-source-macos.tar.xz --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" upload/Bulk.Audio.Normalizer.dmg \
                 --clobber --repo "$GITHUB_REPOSITORY"
               gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease,url,assets \
                 --jq '{isPrerelease, url, assets: [.assets[].name]}'
