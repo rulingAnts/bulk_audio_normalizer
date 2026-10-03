@@ -2,12 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.2] - 2026-10-02
+## [2.0.2] - 2026-10-03 (pre-release, Windows only, still being tested)
 
 ### Fixed
 - Files whose names contain an apostrophe (e.g. "Don't") stopped the batch with an error ([#2](https://github.com/rulingAnts/bulk_audio_normalizer/issues/2))
+- File names with any character Windows allows (accents and umlauts, ß, €, @, #, +, ~, ², ³, !, &, %, commas, spaces, several dots) work in the batch and the preview window; names are shown literally
 - Windows output paths with backslash sequences (e.g. `\x`, `\u`) garbled the log or stopped the batch
 - A batch that stopped on an error no longer reports "Completed"; the error is shown, the status stays "Error", and the controls unlock
+- A file FFmpeg cannot process is marked red, the batch goes on, and the end of the batch lists the files that were not written, instead of "Completed" (the end-of-batch check never ran before)
+- `.wave` files were scanned but could not be written
+- Files with the same name in different subfolders shared one row in the progress list
+- macOS `._` metadata files on USB drives and memory cards are skipped instead of processed as audio
+
+### Added
+- Windows x64 builds are made by a GitHub Actions workflow and published as pre-releases first
 
 ## [2.0.1] - 2025-11-30
 
