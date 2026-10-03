@@ -2,7 +2,7 @@
 
 Python application to batch-process WAV files for linguistics and fieldwork. Supports two normalization intents — Peak dBFS (default, for acoustic analysis) and LUFS (for consistent listening) — plus flexible bit-depth output (16-bit, 24-bit, or preserve original) with a safety limiter available in LUFS mode. Built for very large batches of short files with responsive UI and careful performance controls.
 
-> **📦 Download Ready-to-Use Builds:** Visit [releases](https://github.com/rulingAnts/bulk_audio_normalizer/releases/latest) for macOS (.dmg) and Windows (.exe) downloads — no Python installation required!
+> **📦 Download Ready-to-Use Builds:** Visit [releases](https://github.com/rulingAnts/bulk_audio_normalizer/releases) for Windows (.exe) and macOS (.dmg, Apple silicon) downloads — no Python installation required! For now the macOS .dmg is in the [v2.0.2 pre-release](https://github.com/rulingAnts/bulk_audio_normalizer/releases/tag/v2.0.2); the older macOS downloads were withdrawn (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
 
 > **🌐 User Documentation:** Visit the [project website](https://rulingAnts.github.io/bulk_audio_normalizer/) for screenshots, quick start guide, and direct download buttons.
 
