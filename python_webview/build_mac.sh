@@ -19,15 +19,12 @@ if ! command -v pyinstaller &> /dev/null; then
 fi
 
 # Check if FFmpeg binaries exist
+# Built from FFmpeg's source, not taken from npm: ffmpeg-static's darwin-arm64
+# ffmpeg is a nonfree build that may not be redistributed, and ffprobe-static
+# has no arm64 ffprobe. See build_ffmpeg_mac.sh.
 if [ ! -f "bin/macos/ffmpeg" ] || [ ! -f "bin/macos/ffprobe" ]; then
-    echo "📦 macOS FFmpeg binaries not found. Running setup_ffmpeg.py..."
-    python3 setup_ffmpeg.py
-    # Move binaries to macos directory if they were created in bin/
-    if [ -f "bin/ffmpeg" ] && [ ! -f "bin/macos/ffmpeg" ]; then
-        mkdir -p bin/macos
-        cp bin/ffmpeg bin/macos/
-        cp bin/ffprobe bin/macos/
-    fi
+    echo "📦 macOS FFmpeg binaries not found. Running build_ffmpeg_mac.sh..."
+    ./build_ffmpeg_mac.sh
 fi
 
 # Clean previous macOS builds only
