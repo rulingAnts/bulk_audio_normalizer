@@ -170,6 +170,9 @@ jobs:
           $exe = 'upload/Bulk.Audio.Normalizer.exe'
           $exists = $true
           try { gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json tagName *> $null } catch { $exists = $false }
+          # Re-runs: if Seth has already promoted this tag to a full release, this replaces
+          # the exe people are downloading; if an earlier run left a draft, the exe goes into
+          # the draft and it stays unpublished. Both are left to Seth on purpose.
           if ($exists) {
             "Release $env:TAG exists: replacing its exe only (notes and pre-release flag unchanged)."
             gh release upload $env:TAG $exe --clobber --repo $env:GITHUB_REPOSITORY
