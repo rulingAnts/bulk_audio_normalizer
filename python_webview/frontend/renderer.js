@@ -629,6 +629,15 @@ window.api.onFileDone(({ fileId }) => {
   }
 });
 
+window.api.onFileFailed?.(({ fileId }) => {
+  // FFmpeg could not write this file. The batch goes on and names it at the end.
+  const itemEl = fileItems.get(fileId);
+  if (itemEl) {
+    itemEl.classList.add('error');
+    itemEl.querySelectorAll('.bar').forEach((b) => b.classList.remove('active'));
+  }
+});
+
 window.api.onAllDone(() => {
   setRunning(false);
   batchStatus.textContent = 'Completed';

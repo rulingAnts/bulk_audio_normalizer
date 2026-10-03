@@ -8,6 +8,7 @@ Uses pywebview's JS API bridge for direct Python<->JavaScript communication.
 import os
 import sys
 import json
+import ntpath
 import logging
 import threading
 import tempfile
@@ -69,6 +70,70 @@ def js_call(window, fn: str, *args) -> None:
         logger.warning(f"UI update {fn} failed: {e}")
 
 
+APPLEDOUBLE_MAGIC = b'\x00\x05\x16\x07'
+
+
+def is_appledouble(path: str) -> bool:
+    """
+    True for a macOS AppleDouble metadata file such as "._07 Song.wav".
+
+    macOS writes one next to every file it copies to a FAT/exFAT/network
+    drive. Windows shows them, they end in .wav, but they hold Finder
+    metadata, not audio, so FFmpeg can only fail on them. Both the "._"
+    prefix and the AppleDouble magic number must match, so a real
+    recording whose name merely starts with "._" is still processed.
+    """
+    if not os.path.basename(path).startswith('._'):
+        return False
+    try:
+        with open(path, 'rb') as f:
+            return f.read(4) == APPLEDOUBLE_MAGIC
+    except OSError:
+        return False
+
+
+def reveal_command(file_path: str, system: str):
+    """
+    The command that shows file_path selected in the OS file manager.
+
+    A list is run without a shell, so any character in the name is passed
+    as is. Explorer is the exception: it parses its own command line and
+    treats commas as separators, while Popen only quotes list items that
+    contain a space or tab, so a name like "Take1,Tom.wav" reached Explorer
+    unquoted. It gets one string instead, with the whole path in double
+    quotes. Windows names cannot contain '"', and Popen hands a string to
+    CreateProcess unchanged.
+    """
+    if system == 'Darwin':
+        return ['open', '-R', file_path]
+    if system == 'Windows':
+        return f'explorer /select,"{ntpath.normpath(file_path)}"'
+    return ['xdg-open', os.path.dirname(file_path)]
+
+
+def reveal_in_file_manager(file_path) -> bool:
+    """Show a file or folder in Finder / Explorer / the Linux file manager."""
+    import subprocess
+    import platform
+
+    if not file_path or not os.path.exists(file_path):
+        return False
+    try:
+        subprocess.Popen(reveal_command(file_path, platform.system()))
+        return True
+    except Exception as e:
+        logger.error(f"Failed to reveal path: {e}")
+        return False
+
+
+def not_written_message(rel_paths: List[str], total: int, limit: int = 5) -> str:
+    """The end-of-batch error for files FFmpeg could not write, naming a few."""
+    names = ', '.join(rel_paths[:limit])
+    more = f" and {len(rel_paths) - limit} more" if len(rel_paths) > limit else ''
+    return (f"{len(rel_paths)} of {total} files could not be processed: {names}{more}. "
+            f"The log shows FFmpeg's message for each one; the other files were written.")
+
+
 class API:
     """
     API class exposed to JavaScript via pywebview.
@@ -121,6 +186,9 @@ class API:
                     if entry.is_dir(follow_symlinks=False):
                         walk_dir(entry.path)
                     elif entry.is_file() and entry.name.lower().endswith(('.wav', '.wave')):
+                        if is_appledouble(entry.path):
+                            logger.info(f"Skipping macOS metadata file: {entry.path}")
+                            continue
                         wav_files.append(entry.path)
             except PermissionError:
                 pass
@@ -279,24 +347,7 @@ class API:
         
     def reveal_path(self, file_path):
         """Reveal file in file manager."""
-        import subprocess
-        import platform
-        
-        if not file_path or not os.path.exists(file_path):
-            return False
-            
-        try:
-            system = platform.system()
-            if system == 'Darwin':  # macOS
-                subprocess.Popen(['open', '-R', file_path])
-            elif system == 'Windows':
-                subprocess.Popen(['explorer', '/select,', file_path])
-            else:  # Linux
-                subprocess.Popen(['xdg-open', os.path.dirname(file_path)])
-            return True
-        except Exception as e:
-            logger.error(f"Failed to reveal path: {e}")
-            return False
+        return reveal_in_file_manager(file_path)
     
     def _process_batch_worker(self, input_path: str, output_path: str, settings: Dict):
         """Worker thread for batch processing."""
@@ -331,6 +382,9 @@ class API:
             # Set when a file fails: the user has already been sent
             # triggerError, so the batch must not then report "Completed".
             failed = False
+            # Files FFmpeg could not write. The batch carries on with the
+            # rest and reports these at the end instead of "Completed".
+            not_written = []
 
             # Trigger batch start event
             logger.info(f"Triggering batch start event with {total} files (starting at {completed})")
@@ -359,8 +413,11 @@ class API:
                     out_path = os.path.join(output_path, rel_path)
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     
-                    file_id = os.path.basename(file_path)
-                    file_name = os.path.basename(file_path)
+                    # The relative path, not the bare name: "A/01.wav" and
+                    # "B/01.wav" are different files and need their own row.
+                    # It is the exact native string; js_call delivers it as is.
+                    file_id = rel_path
+                    file_name = rel_path
                     
                     logger.info(f"Processing file {completed + 1}/{total}: {file_name}")
                     
@@ -373,16 +430,19 @@ class API:
                     def log_cb(job_id, phase, message):
                         js_call(main_window, 'triggerLog', job_id, phase, message)
 
-                    normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                    ok = normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
 
                     # Mark file as processed
                     processing_state['processed_files'].add(file_path)
                     completed += 1
 
-                    logger.info(f"File complete: {file_name} ({completed}/{total})")
-
-                    # Send file done event
-                    js_call(main_window, 'triggerFileDone', file_id)
+                    if ok is False:
+                        not_written.append(rel_path)
+                        logger.error(f"FFmpeg could not write: {file_name} ({completed}/{total})")
+                        js_call(main_window, 'triggerFileFailed', file_id)
+                    else:
+                        logger.info(f"File complete: {file_name} ({completed}/{total})")
+                        js_call(main_window, 'triggerFileDone', file_id)
 
                     # Send progress update
                     overall_pct = round((completed / total) * 100, 2)  # Keep as float
@@ -392,7 +452,7 @@ class API:
                     logger.error(f"Failed to process {file_path}: {e}")
                     failed = True
                     js_call(main_window, 'triggerError',
-                            f"Failed to process {os.path.basename(file_path)}: {e}")
+                            f"Failed to process {os.path.relpath(file_path, input_path)}: {e}")
                     break
 
             if failed:
@@ -404,17 +464,13 @@ class API:
                 
                 # Verify all files were processed
                 verification_results = self._verify_batch_output(input_path, output_path)
-                
-                if verification_results['missing'] > 0:
-                    # Files are actually missing - this is an error
-                    logger.error(f"✗ Verification failed: {verification_results['missing']} files missing")
-                    js_call(main_window, 'triggerError',
-                            f"Verification failed: {verification_results['missing']} files not processed")
+                problems = sorted(set(not_written) | set(verification_results['missing_files']))
+
+                if problems:
+                    logger.error(f"✗ Verification failed: {len(problems)} files not written")
+                    js_call(main_window, 'triggerError', not_written_message(problems, total))
                 else:
-                    # No missing files - success (even if there are property mismatches)
                     logger.info(f"✓ Verification passed: {verification_results['matched']} files processed")
-                    if verification_results['mismatched']:
-                        logger.info(f"Note: {len(verification_results['mismatched'])} files had property differences (expected with trimming/normalization)")
                     js_call(main_window, 'triggerAllDone')
 
         except Exception as e:
@@ -427,57 +483,32 @@ class API:
                 processing_state['total_files'] = 0
     
     def _verify_batch_output(self, input_path: str, output_path: str) -> Dict:
-        """Verify that all input files have corresponding output files."""
+        """
+        Check that every input file has a non-empty output file.
+
+        Until v2.0.2 this imported a get_audio_info that never existed, so
+        the ImportError was swallowed and verification passed without
+        checking anything.
+        """
+        results = {'matched': 0, 'missing': 0, 'missing_files': []}
         try:
-            from backend.audio_processor import get_audio_info
-            
-            input_files = self.scan_files(input_path)
-            results = {
-                'success': True,
-                'matched': 0,
-                'missing': 0,
-                'mismatched': []
-            }
-            
-            for input_file in input_files:
+            for input_file in self.scan_files(input_path):
                 rel_path = os.path.relpath(input_file, input_path)
                 output_file = os.path.join(output_path, rel_path)
-                
-                if not os.path.exists(output_file):
-                    logger.error(f"Missing output file: {rel_path}")
-                    results['success'] = False
-                    results['missing'] += 1
-                    results['mismatched'].append(rel_path)
-                    continue
-                
-                # Verify basic properties match
                 try:
-                    input_info = get_audio_info(input_file)
-                    output_info = get_audio_info(output_file)
-                    
-                    # Check duration matches (within 1%)
-                    duration_diff = abs(input_info['duration'] - output_info['duration'])
-                    if duration_diff > input_info['duration'] * 0.01:
-                        logger.warning(f"Duration mismatch for {rel_path}: {input_info['duration']:.2f}s vs {output_info['duration']:.2f}s")
-                        results['mismatched'].append(f"{rel_path} (duration)")
-                    
-                    # Check sample rate matches
-                    if input_info['sample_rate'] != output_info['sample_rate']:
-                        logger.warning(f"Sample rate mismatch for {rel_path}: {input_info['sample_rate']} vs {output_info['sample_rate']}")
-                        results['mismatched'].append(f"{rel_path} (sample rate)")
-                    
+                    written = os.path.getsize(output_file) > 0
+                except OSError:
+                    written = False
+                if written:
                     results['matched'] += 1
-                    
-                except Exception as e:
-                    logger.warning(f"Could not verify {rel_path}: {e}")
-                    results['matched'] += 1  # File exists, count as matched
-            
-            return results
-            
+                else:
+                    logger.error(f"Missing output file: {rel_path}")
+                    results['missing'] += 1
+                    results['missing_files'].append(rel_path)
         except Exception as e:
             logger.error(f"Verification error: {e}")
-            return {'success': False, 'matched': 0, 'missing': 0, 'mismatched': []}
-    
+        return results
+
     def _preview_worker(self, files: List[str], tmp_base: str, input_base: str, settings: Dict):
         """Worker thread for preview processing."""
         global preview_window
@@ -511,11 +542,11 @@ class API:
                         logger.debug(f"Preview {job_id} {phase}: {message}")
                     
                     logger.info(f"Calling normalize_file for {file_id}...")
-                    normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
+                    ok = normalize_file(file_path, out_path, settings, file_id, progress_cb, log_cb)
                     logger.info(f"normalize_file completed for {file_id}")
-                    
+
                     # Verify output file was created
-                    if not os.path.exists(out_path):
+                    if ok is False or not os.path.exists(out_path):
                         logger.error(f"Output file not created: {out_path}")
                         continue
                     
@@ -637,24 +668,7 @@ class PreviewAPI:
     
     def reveal_path(self, file_path):
         """Reveal file in file manager."""
-        import subprocess
-        import platform
-        
-        if not file_path or not os.path.exists(file_path):
-            return False
-            
-        try:
-            system = platform.system()
-            if system == 'Darwin':  # macOS
-                subprocess.Popen(['open', '-R', file_path])
-            elif system == 'Windows':
-                subprocess.Popen(['explorer', '/select,', file_path])
-            else:  # Linux
-                subprocess.Popen(['xdg-open', os.path.dirname(file_path)])
-            return True
-        except Exception as e:
-            logger.error(f"Failed to reveal path: {e}")
-            return False
+        return reveal_in_file_manager(file_path)
 
 
 def main():

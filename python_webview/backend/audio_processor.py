@@ -265,11 +265,18 @@ def detect_voice_region(input_path: str, duration_sec: float, settings: Dict,
         return None
 
 
+def ffmpeg_error_tail(stderr: Optional[bytes], lines: int = 3) -> str:
+    """The last few non-empty lines of FFmpeg's stderr, for a log message."""
+    text = (stderr or b'').decode('utf-8', errors='replace')
+    tail = [ln.strip() for ln in text.splitlines() if ln.strip()][-lines:]
+    return ' | '.join(tail) or 'no error message'
+
+
 def normalize_file(input_path: str, output_path: str, settings: Dict,
-                  job_id: str, progress_callback: Callable, log_callback: Callable) -> None:
+                  job_id: str, progress_callback: Callable, log_callback: Callable) -> Optional[bool]:
     """
     Normalize an audio file with trimming and normalization.
-    
+
     Args:
         input_path: Input file path
         output_path: Output file path
@@ -277,6 +284,10 @@ def normalize_file(input_path: str, output_path: str, settings: Dict,
         job_id: Job ID
         progress_callback: Progress callback(job_id, phase, status, pct)
         log_callback: Log callback(job_id, phase, message)
+
+    Returns:
+        True when FFmpeg wrote the output, False when it failed (the reason
+        has been sent to log_callback), None when processing was canceled.
     """
     if process_manager.is_canceled():
         return
@@ -414,11 +425,22 @@ def normalize_file(input_path: str, output_path: str, settings: Dict,
     verbosity = ['-v', 'info'] if verbose else ['-hide_banner', '-v', 'error']
     thread_args = ['-threads', str(threads)] if threads > 0 else []
     
+    # '-f wav': the output is always WAV. Without it FFmpeg picks the format
+    # from the extension and refuses ".wave" files, which the scan accepts.
+    # Paths go in an argv list (no shell), so no character needs escaping.
     cmd = [ffmpeg] + verbosity + seek_args + ['-y', '-i', input_path] + thread_args + \
-          ['-af', ','.join(filter_parts), '-acodec', out_codec, '-map_metadata', '-1', output_path]
-          
+          ['-af', ','.join(filter_parts), '-acodec', out_codec, '-map_metadata', '-1',
+           '-f', 'wav', output_path]
+
     proc = process_manager.spawn(cmd, job_id=job_id)
     _, stderr = proc.communicate()
-    
+
     progress_callback(job_id, 'render', 'done', 100)
+    if proc.returncode != 0 and not process_manager.is_canceled():
+        # Say so instead of "Completed": the caller reports the file at the end.
+        reason = ffmpeg_error_tail(stderr)
+        logger.error(f"FFmpeg failed (exit code {proc.returncode}) for {input_path}: {reason}")
+        log_callback(job_id, 'render', f"FFmpeg failed (exit code {proc.returncode}): {reason}")
+        return False
     log_callback(job_id, 'render', f"Completed: {output_path}")
+    return True

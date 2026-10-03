@@ -177,6 +177,10 @@ window.api = {
     window._fileDoneCallback = callback;
   },
 
+  onFileFailed: (callback) => {
+    window._fileFailedCallback = callback;
+  },
+
   onAllDone: (callback) => {
     window._allDoneCallback = callback;
   },
@@ -278,6 +282,12 @@ window.triggerBatchStart = (total) => {
 window.triggerFileDone = (fileId) => {
   if (window._fileDoneCallback) {
     window._fileDoneCallback({ fileId });
+  }
+};
+
+window.triggerFileFailed = (fileId) => {
+  if (window._fileFailedCallback) {
+    window._fileFailedCallback({ fileId });
   }
 };
 
